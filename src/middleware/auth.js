@@ -34,8 +34,8 @@ const protect = async (req, res, next) => {
       // Verify token
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-      // Find user by ID from token
-      req.user = await User.findById(decoded.id).select('-password');
+      // Find user by ID from token (PostgreSQL query)
+      req.user = await User.findById(decoded.id);
 
       // Check if user still exists
       if (!req.user) {
@@ -89,7 +89,7 @@ const authorize = (...roles) => {
 
 /**
  * Generate JWT token for user
- * @param {string} id - User ID
+ * @param {string} id - User ID (UUID)
  * @returns {string} - JWT token
  */
 const generateToken = (id) => {

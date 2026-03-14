@@ -1,114 +1,166 @@
-// src/models/User.js
-// This file defines the User schema for MongoDB
+// src/models/user.js
+// This file defines User model operations for PostgreSQL
 
-const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
+const { pool } = require('../config/database');
 
 /**
- * User Schema
- * Defines structure of user documents in MongoDB
+ * User Model
+ * Provides CRUD operations for the users table in PostgreSQL
  */
-const userSchema = new mongoose.Schema(
-  {
-    // User's full name
-    name: {
-      type: String,
-      required: [true, 'Please provide a name'],
-      trim: true,
-    },
+const User = {
+  /**
+   * Create a new user
+   * @param {object} userData - { name, email, password, role, department, employeeId }
+   * @returns {object} - Created user (without password)
+   */
+  async create(userData) {
+    const { name, email, password, role, department, employeeId } = userData;
 
-    // Email - must be unique
-    email: {
-      type: String,
-      required: [true, 'Please provide an email'],
-      unique: true,
-      lowercase: true,
-      trim: true,
-      match: [
-        /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
-        'Please provide a valid email',
-      ],
-    },
+    // Hash password before storing
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
 
-    // Password - will be hashed before saving
-    password: {
-      type: String,
-      required: [true, 'Please provide a password'],
-      minlength: 6,
-      select: false, // Don't return password by default in queries
-    },
+    const query = `
+      INSERT INTO users (name, email, password, role, department, employee_id)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING id, name, email, role, is_active, allowed_companies, employee_id, department, created_at, updated_at
+    `;
+    const values = [
+      name,
+      email.toLowerCase().trim(),
+      hashedPassword,
+      role || 'employee',
+      department || null,
+      employeeId || null,
+    ];
 
-    // User role: admin, manager, or employee
-    role: {
-      type: String,
-      enum: ['admin', 'manager', 'employee'],
-      default: 'employee',
-    },
-
-    // Account status
-    isActive: {
-      type: Boolean,
-      default: true,
-    },
-
-    // Which Tally companies this user can access (optional)
-    allowedCompanies: {
-      type: [String],
-      default: [],
-    },
-
-    // Employee-specific data (optional)
-    employeeId: {
-      type: String,
-      sparse: true, // Allows multiple null values
-    },
-
-    // Department (optional)
-    department: {
-      type: String,
-    },
+    const result = await pool.query(query, values);
+    return this._formatUser(result.rows[0]);
   },
-  {
-    // Automatically add createdAt and updatedAt timestamps
-    timestamps: true,
-  }
-);
 
-/**
- * Hash password before saving to database
- * This runs automatically before user.save()
- */
-userSchema.pre('save', async function () {
-  // Only hash password if it's modified or new
-  if (!this.isModified('password')) {
-    return;
-  }
+  /**
+   * Find a user by email
+   * @param {string} email
+   * @param {boolean} includePassword - Whether to include password in result
+   * @returns {object|null} - User object or null
+   */
+  async findByEmail(email, includePassword = false) {
+    const fields = includePassword
+      ? '*'
+      : 'id, name, email, role, is_active, allowed_companies, employee_id, department, created_at, updated_at';
 
-  // Generate salt and hash password
-  const salt = await bcrypt.genSalt(10);
-  this.password = await bcrypt.hash(this.password, salt);
-});
+    const query = `SELECT ${fields} FROM users WHERE email = $1`;
+    const result = await pool.query(query, [email.toLowerCase().trim()]);
 
-/**
- * Method to compare entered password with hashed password
- * @param {string} enteredPassword - Password entered by user
- * @returns {boolean} - True if passwords match
- */
-userSchema.methods.comparePassword = async function (enteredPassword) {
-  return await bcrypt.compare(enteredPassword, this.password);
+    if (result.rows.length === 0) return null;
+    return this._formatUser(result.rows[0]);
+  },
+
+  /**
+   * Find a user by ID
+   * @param {string} id - UUID
+   * @param {boolean} includePassword - Whether to include password in result
+   * @returns {object|null} - User object or null
+   */
+  async findById(id, includePassword = false) {
+    const fields = includePassword
+      ? '*'
+      : 'id, name, email, role, is_active, allowed_companies, employee_id, department, created_at, updated_at';
+
+    const query = `SELECT ${fields} FROM users WHERE id = $1`;
+    const result = await pool.query(query, [id]);
+
+    if (result.rows.length === 0) return null;
+    return this._formatUser(result.rows[0]);
+  },
+
+  /**
+   * Find all users (without passwords)
+   * @returns {Array} - List of users
+   */
+  async findAll() {
+    const query = `
+      SELECT id, name, email, role, is_active, allowed_companies, employee_id, department, created_at, updated_at
+      FROM users
+      ORDER BY created_at DESC
+    `;
+    const result = await pool.query(query);
+    return result.rows.map((row) => this._formatUser(row));
+  },
+
+  /**
+   * Compare entered password with hashed password
+   * @param {string} enteredPassword - Plain text password
+   * @param {string} hashedPassword - Hashed password from DB
+   * @returns {boolean}
+   */
+  async comparePassword(enteredPassword, hashedPassword) {
+    return await bcrypt.compare(enteredPassword, hashedPassword);
+  },
+
+  /**
+   * Update a user by ID
+   * @param {string} id - UUID
+   * @param {object} updateData - Fields to update
+   * @returns {object|null} - Updated user or null
+   */
+  async updateById(id, updateData) {
+    const allowedFields = ['name', 'email', 'role', 'is_active', 'department', 'employee_id', 'allowed_companies'];
+    const setClauses = [];
+    const values = [];
+    let paramIndex = 1;
+
+    for (const [key, value] of Object.entries(updateData)) {
+      // Convert camelCase to snake_case for DB columns
+      const dbKey = key.replace(/([A-Z])/g, '_$1').toLowerCase();
+      if (allowedFields.includes(dbKey)) {
+        setClauses.push(`${dbKey} = $${paramIndex}`);
+        values.push(value);
+        paramIndex++;
+      }
+    }
+
+    if (setClauses.length === 0) return null;
+
+    // Always update updated_at
+    setClauses.push(`updated_at = NOW()`);
+    values.push(id);
+
+    const query = `
+      UPDATE users
+      SET ${setClauses.join(', ')}
+      WHERE id = $${paramIndex}
+      RETURNING id, name, email, role, is_active, allowed_companies, employee_id, department, created_at, updated_at
+    `;
+
+    const result = await pool.query(query, values);
+    if (result.rows.length === 0) return null;
+    return this._formatUser(result.rows[0]);
+  },
+
+  /**
+   * Format a database row into a consistent user object
+   * Maps snake_case DB columns to camelCase JS properties
+   * @private
+   */
+  _formatUser(row) {
+    if (!row) return null;
+    return {
+      _id: row.id, // Keep _id for backwards compatibility with frontend
+      id: row.id,
+      name: row.name,
+      email: row.email,
+      password: row.password || undefined, // Only present if explicitly requested
+      role: row.role,
+      isActive: row.is_active,
+      allowedCompanies: row.allowed_companies || [],
+      employeeId: row.employee_id,
+      department: row.department,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  },
 };
-
-/**
- * Method to get user info without sensitive data
- * @returns {object} - User object without password
- */
-userSchema.methods.toJSON = function () {
-  const user = this.toObject();
-  delete user.password;
-  return user;
-};
-
-// Create and export User model
-const User = mongoose.model('User', userSchema);
 
 module.exports = User;

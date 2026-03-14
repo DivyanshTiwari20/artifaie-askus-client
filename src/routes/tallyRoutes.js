@@ -5,6 +5,79 @@ const express = require('express');
 const router = express.Router();
 const tallyService = require('../services/tallyServices');
 const { protect, authorize } = require('../middleware/auth');
+const TallyDiagnostics = require('../utils/diagnostics');
+const {
+  deriveReceivables,
+  derivePayables,
+  deriveProfitLoss,
+  deriveGSTSummary,
+  deriveClientBilling,
+  deriveBankPosition,
+  deriveInvoiceRegister,
+  deriveBalanceSheet,
+  deriveTrialBalance,
+  getPreviousMonthRange,
+  getSameMonthLastYearRange,
+  getCurrentMonthRange,
+} = require('../utils/derivedLogic');
+
+/**
+ * @route   GET /api/tally/diagnostics
+ * @desc    Run comprehensive diagnostics to troubleshoot Tally connection
+ * @access  Public (no auth required for debugging)
+ */
+router.get('/diagnostics', async (req, res) => {
+  try {
+    console.log('🔍 Running Tally connection diagnostics...');
+    console.log(`   Target Host: ${tallyService.tallyHost}`);
+
+    const diagnostics = new TallyDiagnostics(tallyService.tallyHost);
+    const results = await diagnostics.runAllTests();
+
+    res.status(200).json({
+      success: true,
+      message: 'Diagnostics completed - check response for details',
+      tallyHost: tallyService.tallyHost,
+      results: results
+    });
+  } catch (error) {
+    console.error('❌ Diagnostics error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to run diagnostics',
+      error: error.message,
+      tallyHost: tallyService.tallyHost,
+    });
+  }
+});
+
+/**
+ * @route   GET /api/tally/test-public
+ * @desc    Test Tally connection (public endpoint for debugging)
+ * @access  Public
+ */
+router.get('/test-public', async (req, res) => {
+  try {
+    console.log('🔍 Testing Tally connection (public)...');
+    console.log(`   Tally Host: ${tallyService.tallyHost}`);
+
+    await tallyService.getCompanies();
+
+    res.status(200).json({
+      success: true,
+      message: 'Successfully connected to Tally',
+      tallyHost: tallyService.tallyHost,
+    });
+  } catch (error) {
+    console.error('❌ Connection test error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to connect to Tally',
+      error: error.message,
+      tallyHost: tallyService.tallyHost,
+    });
+  }
+});
 
 /**
  * @route   GET /api/tally/test
@@ -14,27 +87,24 @@ const { protect, authorize } = require('../middleware/auth');
 router.get('/test', protect, authorize('admin'), async (req, res) => {
   try {
     console.log('🔍 Testing Tally connection...');
-    
-    const isConnected = await tallyService.testConnection();
+    console.log(`   Tally Host: ${tallyService.tallyHost}`);
 
-    if (isConnected) {
-      res.status(200).json({
-        success: true,
-        message: 'Successfully connected to Tally',
-        tallyHost: tallyService.tallyHost,
-      });
-    } else {
-      res.status(500).json({
-        success: false,
-        message: 'Failed to connect to Tally',
-        tallyHost: tallyService.tallyHost,
-      });
-    }
+    // Test connection by trying to get companies
+    // This will throw an error if connection fails, giving us the actual error message
+    await tallyService.getCompanies();
+
+    res.status(200).json({
+      success: true,
+      message: 'Successfully connected to Tally',
+      tallyHost: tallyService.tallyHost,
+    });
   } catch (error) {
     console.error('❌ Connection test error:', error);
     res.status(500).json({
       success: false,
-      message: error.message,
+      message: error.message || 'Failed to connect to Tally',
+      error: error.message,
+      tallyHost: tallyService.tallyHost,
     });
   }
 });
@@ -47,7 +117,7 @@ router.get('/test', protect, authorize('admin'), async (req, res) => {
 router.get('/companies', protect, async (req, res) => {
   try {
     console.log('📊 Fetching companies from Tally...');
-    
+
     const companies = await tallyService.getCompanies();
 
     res.status(200).json({
@@ -66,26 +136,32 @@ router.get('/companies', protect, async (req, res) => {
 
 /**
  * @route   GET /api/tally/trial-balance
- * @desc    Get Trial Balance report
+ * @desc    Get enhanced Trial Balance with last entry dates and group filtering
  * @access  Private (Admin & Manager only)
  * @query   fromDate - Start date (YYYYMMDD format, optional)
  * @query   toDate - End date (YYYYMMDD format, optional)
+ * @query   ledgerGroup - Filter by ledger group (optional)
  */
 router.get('/trial-balance', protect, authorize('admin', 'manager'), async (req, res) => {
   try {
-    const { fromDate, toDate } = req.query;
+    const { fromDate, toDate, ledgerGroup, status } = req.query;
 
-    console.log('📊 Fetching Trial Balance from Tally...');
+    console.log('📊 Fetching Enhanced Trial Balance from Tally...');
     console.log(`   Period: ${fromDate || 'Default'} to ${toDate || 'Default'}`);
+    if (ledgerGroup) console.log(`   Ledger Group: ${ledgerGroup}`);
+    if (status) console.log(`   Status Filter: ${status}`);
 
-    const trialBalance = await tallyService.getTrialBalance(fromDate, toDate);
+    const trialBalance = await tallyService.getEnhancedTrialBalance(fromDate, toDate, ledgerGroup);
+    const derived = deriveTrialBalance(trialBalance, status);
 
     res.status(200).json({
       success: true,
-      data: trialBalance,
+      data: derived,
       filters: {
         fromDate: fromDate || 'Default (Apr 1, 2024)',
         toDate: toDate || 'Default (Mar 31, 2025)',
+        ledgerGroup: ledgerGroup || 'All',
+        status: status || 'All',
       },
     });
   } catch (error) {
@@ -193,6 +269,436 @@ router.get('/reports/summary', protect, async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Get reports summary error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * @route   GET /api/tally/stock-items
+ * @desc    Get list of all stock items
+ * @access  Private (Admin & Manager only)
+ */
+router.get('/stock-items', protect, authorize('admin', 'manager'), async (req, res) => {
+  try {
+    console.log('📊 Fetching Stock Items from Tally...');
+
+    const stockItems = await tallyService.getStockItems();
+
+    res.status(200).json({
+      success: true,
+      count: stockItems.length,
+      data: stockItems,
+    });
+  } catch (error) {
+    console.error('❌ Get stock items error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * @route   GET /api/tally/stock-groups
+ * @desc    Get list of all stock groups
+ * @access  Private (Admin & Manager only)
+ */
+router.get('/stock-groups', protect, authorize('admin', 'manager'), async (req, res) => {
+  try {
+    console.log('📊 Fetching Stock Groups from Tally...');
+
+    const stockGroups = await tallyService.getStockGroups();
+
+    res.status(200).json({
+      success: true,
+      count: stockGroups.length,
+      data: stockGroups,
+    });
+  } catch (error) {
+    console.error('❌ Get stock groups error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * @route   GET /api/tally/vouchers/:type
+ * @desc    Get vouchers by type (Sales, Purchase, Receipt, Payment, etc.)
+ * @access  Private (Admin & Manager only)
+ * @param   type - Voucher type (Sales, Purchase, Receipt, Payment, Journal, Contra)
+ * @query   fromDate - Start date (YYYYMMDD format, optional)
+ * @query   toDate - End date (YYYYMMDD format, optional)
+ */
+router.get('/vouchers/:type', protect, authorize('admin', 'manager'), async (req, res) => {
+  try {
+    const { type } = req.params;
+    const { fromDate, toDate } = req.query;
+
+    // Validate voucher type
+    const validTypes = ['Sales', 'Purchase', 'Receipt', 'Payment', 'Journal', 'Contra', 'Credit Note', 'Debit Note'];
+    if (!validTypes.includes(type)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid voucher type. Valid types are: ${validTypes.join(', ')}`,
+      });
+    }
+
+    console.log(`📊 Fetching ${type} Vouchers from Tally...`);
+    console.log(`   Period: ${fromDate || 'Default'} to ${toDate || 'Default'}`);
+
+    const vouchers = await tallyService.getVouchers(type, fromDate, toDate);
+
+    res.status(200).json({
+      success: true,
+      voucherType: type,
+      count: vouchers.length,
+      data: vouchers,
+      filters: {
+        fromDate: fromDate || 'Default (Apr 1, 2024)',
+        toDate: toDate || 'Default (Mar 31, 2025)',
+      },
+    });
+  } catch (error) {
+    console.error('❌ Get vouchers error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * @route   GET /api/tally/receivables
+ * @desc    Get accounts receivable (outstanding bills from Sundry Debtors)
+ * @access  Private (Admin & Manager only)
+ * @query   fromDate - Start date (YYYYMMDD format, optional)
+ * @query   toDate - End date (YYYYMMDD format, optional)
+ */
+router.get('/receivables', protect, authorize('admin', 'manager'), async (req, res) => {
+  try {
+    const { fromDate, toDate } = req.query;
+
+    console.log('📊 Fetching Receivables from Tally...');
+    console.log(`   Period: ${fromDate || 'Default'} to ${toDate || 'Default'}`);
+
+    // Fetch receivables + MTD receipts in parallel
+    const mtdRange = getCurrentMonthRange();
+    const [receivables, mtdReceipts] = await Promise.all([
+      tallyService.getReceivables(fromDate, toDate),
+      tallyService.getVouchers('Receipt', mtdRange.fromDate, mtdRange.toDate).catch(() => []),
+    ]);
+
+    const mtdCollections = mtdReceipts.reduce(
+      (sum, v) => sum + Math.abs(parseFloat(v.amount) || 0), 0
+    );
+
+    const derived = deriveReceivables(receivables, mtdCollections);
+
+    res.status(200).json({
+      success: true,
+      count: derived.bills.length,
+      data: derived,
+      filters: {
+        fromDate: fromDate || 'Default (Apr 1, 2024)',
+        toDate: toDate || 'Default (Mar 31, 2025)',
+      },
+    });
+  } catch (error) {
+    console.error('❌ Get receivables error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * @route   GET /api/tally/payables
+ * @desc    Get accounts payable (outstanding bills from Sundry Creditors + TDS + Advances)
+ * @access  Private (Admin & Manager only)
+ * @query   fromDate - Start date (YYYYMMDD format, optional)
+ * @query   toDate - End date (YYYYMMDD format, optional)
+ */
+router.get('/payables', protect, authorize('admin', 'manager'), async (req, res) => {
+  try {
+    const { fromDate, toDate } = req.query;
+
+    console.log('📊 Fetching Payables from Tally...');
+    console.log(`   Period: ${fromDate || 'Default'} to ${toDate || 'Default'}`);
+
+    const result = await tallyService.getPayables(fromDate, toDate);
+    const derived = derivePayables(result);
+
+    res.status(200).json({
+      success: true,
+      data: derived,
+      filters: {
+        fromDate: fromDate || 'Default (Apr 1, 2024)',
+        toDate: toDate || 'Default (Mar 31, 2025)',
+      },
+    });
+  } catch (error) {
+    console.error('❌ Get payables error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * @route   GET /api/tally/profit-loss
+ * @desc    Get enhanced Profit & Loss report with revenue/expense breakup and major expense heads
+ * @access  Private (Admin & Manager only)
+ * @query   fromDate - Start date (YYYYMMDD format, optional)
+ * @query   toDate - End date (YYYYMMDD format, optional)
+ */
+router.get('/profit-loss', protect, authorize('admin', 'manager'), async (req, res) => {
+  try {
+    const { fromDate, toDate } = req.query;
+
+    console.log('📊 Fetching Enhanced Profit & Loss from Tally...');
+    console.log(`   Period: ${fromDate || 'Default'} to ${toDate || 'Default'}`);
+
+    // Fetch current, last month, and same month last year in parallel
+    const lastMonthRange = getPreviousMonthRange();
+    const sameMonthLYRange = getSameMonthLastYearRange();
+
+    const [profitLoss, lastMonthPL, sameMonthLYPL] = await Promise.all([
+      tallyService.getEnhancedProfitLoss(fromDate, toDate),
+      tallyService.getEnhancedProfitLoss(lastMonthRange.fromDate, lastMonthRange.toDate).catch(() => null),
+      tallyService.getEnhancedProfitLoss(sameMonthLYRange.fromDate, sameMonthLYRange.toDate).catch(() => null),
+    ]);
+
+    const derived = deriveProfitLoss(profitLoss, lastMonthPL, sameMonthLYPL);
+
+    res.status(200).json({
+      success: true,
+      data: derived,
+      filters: {
+        fromDate: fromDate || 'Default (Apr 1, 2024)',
+        toDate: toDate || 'Default (Mar 31, 2025)',
+        comparedWith: {
+          lastMonth: `${lastMonthRange.fromDate} - ${lastMonthRange.toDate}`,
+          sameMonthLastYear: `${sameMonthLYRange.fromDate} - ${sameMonthLYRange.toDate}`,
+        },
+      },
+    });
+  } catch (error) {
+    console.error('❌ Get profit & loss error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * @route   GET /api/tally/gst-summary
+ * @desc    Get GST summary (Output GST, ITC, TDS, RCM)
+ * @access  Private (Admin & Manager only)
+ * @query   fromDate - Start date (YYYYMMDD format, optional)
+ * @query   toDate - End date (YYYYMMDD format, optional)
+ */
+router.get('/gst-summary', protect, authorize('admin', 'manager'), async (req, res) => {
+  try {
+    const { fromDate, toDate } = req.query;
+
+    console.log('📊 Fetching GST Summary from Tally...');
+    console.log(`   Period: ${fromDate || 'Default'} to ${toDate || 'Default'}`);
+
+    const gstSummary = await tallyService.getGSTSummary(fromDate, toDate);
+    const derived = deriveGSTSummary(gstSummary);
+
+    res.status(200).json({
+      success: true,
+      data: derived,
+      filters: {
+        fromDate: fromDate || 'Default (Apr 1, 2024)',
+        toDate: toDate || 'Default (Mar 31, 2025)',
+      },
+    });
+  } catch (error) {
+    console.error('❌ Get GST summary error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * @route   GET /api/tally/client-billing
+ * @desc    Get client billing (Sales vouchers + outstanding per invoice)
+ * @access  Private (Admin & Manager only)
+ * @query   clientName - Client/party name (optional, filters by specific client)
+ * @query   fromDate - Start date (YYYYMMDD format, optional)
+ * @query   toDate - End date (YYYYMMDD format, optional)
+ */
+router.get('/client-billing', protect, authorize('admin', 'manager'), async (req, res) => {
+  try {
+    const { clientName, fromDate, toDate } = req.query;
+
+    console.log('📊 Fetching Client Billing from Tally...');
+    console.log(`   Client: ${clientName || 'All'}`);
+    console.log(`   Period: ${fromDate || 'Default'} to ${toDate || 'Default'}`);
+
+    const billing = await tallyService.getClientBilling(clientName, fromDate, toDate);
+    const derived = deriveClientBilling(billing);
+
+    res.status(200).json({
+      success: true,
+      count: derived.invoices.length,
+      data: derived,
+      filters: {
+        clientName: clientName || 'All',
+        fromDate: fromDate || 'Default (Apr 1, 2024)',
+        toDate: toDate || 'Default (Mar 31, 2025)',
+      },
+    });
+  } catch (error) {
+    console.error('❌ Get client billing error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * @route   GET /api/tally/bank-position
+ * @desc    Get bank position (bank ledgers, cash, uncleared cheques, receipts/payments)
+ * @access  Private (Admin & Manager only)
+ * @query   fromDate - Start date (YYYYMMDD format, optional)
+ * @query   toDate - End date (YYYYMMDD format, optional)
+ */
+router.get('/bank-position', protect, authorize('admin', 'manager'), async (req, res) => {
+  try {
+    const { fromDate, toDate } = req.query;
+
+    console.log('📊 Fetching Bank Position from Tally...');
+    console.log(`   Period: ${fromDate || 'Default'} to ${toDate || 'Default'}`);
+
+    const bankPosition = await tallyService.getBankPosition(fromDate, toDate);
+    const derived = deriveBankPosition(bankPosition);
+
+    res.status(200).json({
+      success: true,
+      data: derived,
+      filters: {
+        fromDate: fromDate || 'Default (Apr 1, 2024)',
+        toDate: toDate || 'Default (Mar 31, 2025)',
+      },
+    });
+  } catch (error) {
+    console.error('❌ Get bank position error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * @route   GET /api/tally/invoice-register
+ * @desc    Get invoice register with tax breakup, outstanding, and GSTIN
+ * @access  Private (Admin & Manager only)
+ * @query   fromDate - Start date (YYYYMMDD format, optional)
+ * @query   toDate - End date (YYYYMMDD format, optional)
+ * @query   clientName - Client/party name (optional, filters by specific client)
+ */
+router.get('/invoice-register', protect, authorize('admin', 'manager'), async (req, res) => {
+  try {
+    const { fromDate, toDate, clientName, paymentStatus } = req.query;
+
+    console.log('📊 Fetching Invoice Register from Tally...');
+    console.log(`   Client: ${clientName || 'All'}`);
+    console.log(`   Period: ${fromDate || 'Default'} to ${toDate || 'Default'}`);
+    if (paymentStatus) console.log(`   Filter: ${paymentStatus}`);
+
+    const invoices = await tallyService.getInvoiceRegister(fromDate, toDate, clientName);
+    const derived = deriveInvoiceRegister(invoices, paymentStatus);
+
+    res.status(200).json({
+      success: true,
+      count: derived.invoices.length,
+      data: derived,
+      filters: {
+        clientName: clientName || 'All',
+        fromDate: fromDate || 'Default (Apr 1, 2024)',
+        toDate: toDate || 'Default (Mar 31, 2025)',
+        paymentStatus: paymentStatus || 'All',
+      },
+    });
+  } catch (error) {
+    console.error('❌ Get invoice register error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * @route   GET /api/tally/balance-sheet
+ * @desc    Get enhanced Balance Sheet with categorized ledgers and comparison
+ * @access  Private (Admin & Manager only)
+ * @query   fromDate - Start date (YYYYMMDD format, optional)
+ * @query   toDate - End date (YYYYMMDD format, optional)
+ * @query   compareDate - Compare to date for side-by-side (YYYYMMDD format, optional)
+ */
+router.get('/balance-sheet', protect, authorize('admin', 'manager'), async (req, res) => {
+  try {
+    const { fromDate, toDate, compareDate } = req.query;
+
+    console.log('📊 Fetching Enhanced Balance Sheet from Tally...');
+    console.log(`   Period: ${fromDate || 'Default'} to ${toDate || 'Default'}`);
+    if (compareDate) console.log(`   Compare to: ${compareDate}`);
+
+    const balanceSheet = await tallyService.getEnhancedBalanceSheet(fromDate, toDate, compareDate);
+    const derived = deriveBalanceSheet(balanceSheet);
+
+    res.status(200).json({
+      success: true,
+      data: derived,
+      filters: {
+        fromDate: fromDate || 'Default (Apr 1, 2024)',
+        toDate: toDate || 'Default (Mar 31, 2025)',
+        compareDate: compareDate || 'None',
+      },
+    });
+  } catch (error) {
+    console.error('❌ Get balance sheet error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * @route   GET /api/tally/ledger-groups
+ * @desc    Get list of all ledger groups
+ * @access  Private (Admin & Manager only)
+ */
+router.get('/ledger-groups', protect, authorize('admin', 'manager'), async (req, res) => {
+  try {
+    console.log('📊 Fetching Ledger Groups from Tally...');
+
+    const ledgerGroups = await tallyService.getLedgerGroups();
+
+    res.status(200).json({
+      success: true,
+      count: ledgerGroups.length,
+      data: ledgerGroups,
+    });
+  } catch (error) {
+    console.error('❌ Get ledger groups error:', error);
     res.status(500).json({
       success: false,
       message: error.message,

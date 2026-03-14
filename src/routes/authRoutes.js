@@ -16,7 +16,15 @@ router.post('/register', async (req, res) => {
       });
     }
 
-    const existingUser = await User.findOne({ email });
+    if (password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 6 characters',
+      });
+    }
+
+    // Check if user already exists
+    const existingUser = await User.findByEmail(email);
     if (existingUser) {
       return res.status(400).json({
         success: false,
@@ -24,6 +32,7 @@ router.post('/register', async (req, res) => {
       });
     }
 
+    // Create user in PostgreSQL
     const user = await User.create({
       name,
       email,
@@ -37,7 +46,7 @@ router.post('/register', async (req, res) => {
       success: true,
       message: 'User created successfully',
       data: {
-        id: user._id,
+        id: user.id,
         name: user.name,
         email: user.email,
         role: user.role,
@@ -45,6 +54,15 @@ router.post('/register', async (req, res) => {
     });
   } catch (error) {
     console.error('Registration error:', error);
+
+    // Handle PostgreSQL unique constraint violation
+    if (error.code === '23505') {
+      return res.status(400).json({
+        success: false,
+        message: 'User with this email already exists',
+      });
+    }
+
     res.status(500).json({
       success: false,
       message: 'Server error during registration',
@@ -65,7 +83,8 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    const user = await User.findOne({ email }).select('+password');
+    // Find user with password included
+    const user = await User.findByEmail(email, true);
 
     if (!user) {
       return res.status(401).json({
@@ -81,7 +100,8 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    const isPasswordMatch = await user.comparePassword(password);
+    // Compare password using the User model's static method
+    const isPasswordMatch = await User.comparePassword(password, user.password);
 
     if (!isPasswordMatch) {
       return res.status(401).json({
@@ -90,14 +110,14 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    const token = generateToken(user._id);
+    const token = generateToken(user.id);
 
     res.status(200).json({
       success: true,
       message: 'Login successful',
       token,
       data: {
-        id: user._id,
+        id: user.id,
         name: user.name,
         email: user.email,
         role: user.role,
@@ -131,7 +151,7 @@ router.get('/me', protect, async (req, res) => {
 // Get all users (Admin only)
 router.get('/users', protect, authorize('admin'), async (req, res) => {
   try {
-    const users = await User.find().select('-password');
+    const users = await User.findAll();
     res.status(200).json({
       success: true,
       count: users.length,

@@ -6,14 +6,14 @@ require('dotenv').config();
 
 const express = require('express');
 const cors = require('cors');
-const connectDatabase = require('./config/database');
+const { connectDatabase } = require('./config/database');
 const authRoutes = require('./routes/authRoutes');
 const tallyRoutes = require('./routes/tallyRoutes');
 
 // Initialize Express app
 const app = express();
 
-// Connect to MongoDB database
+// Connect to PostgreSQL database
 connectDatabase();
 
 // ============================================
@@ -51,6 +51,7 @@ app.get('/', (req, res) => {
     success: true,
     message: 'Tally Mobile App Backend API',
     version: '1.0.0',
+    database: 'PostgreSQL (AWS RDS)',
     endpoints: {
       health: '/health',
       auth: '/api/auth/*',
@@ -106,6 +107,7 @@ app.listen(PORT, () => {
   console.log('   ========================================');
   console.log(`   📍 Server: http://localhost:${PORT}`);
   console.log(`   🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`   🗄️  Database: PostgreSQL (AWS RDS)`);
   console.log(`   📊 Tally Host: ${process.env.TALLY_HOST || 'Not configured'}`);
   console.log('   ========================================\n');
 });
