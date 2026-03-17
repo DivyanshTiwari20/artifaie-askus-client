@@ -55,8 +55,8 @@ router.post('/register', async (req, res) => {
   } catch (error) {
     console.error('Registration error:', error);
 
-    // Handle PostgreSQL unique constraint violation
-    if (error.code === '23505') {
+    // Handle PostgreSQL (23505) and MongoDB (11000) unique constraint violation
+    if (error.code === '23505' || error.code === 11000) {
       return res.status(400).json({
         success: false,
         message: 'User with this email already exists',

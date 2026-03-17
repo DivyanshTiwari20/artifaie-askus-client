@@ -1,7 +1,7 @@
 # Dependencies
 node_modules/
 
-# Environment variables
+# Environment variables (NEVER commit this!)
 .env
 
 # Logs
@@ -11,3 +11,11 @@ npm-debug.log*
 # OS files
 .DS_Store
 Thumbs.db
+
+# Diagnostic/test output
+diagnostics_output.txt
+server_log.txt
+
+# Editor files
+.vscode/
+.idea/

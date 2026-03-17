@@ -51,7 +51,7 @@ app.get('/', (req, res) => {
     success: true,
     message: 'Tally Mobile App Backend API',
     version: '1.0.0',
-    database: 'PostgreSQL (AWS RDS)',
+    database: process.env.DB_TYPE === 'mongodb' ? 'MongoDB (Local/Atlas)' : 'PostgreSQL (AWS RDS)',
     endpoints: {
       health: '/health',
       auth: '/api/auth/*',
@@ -100,14 +100,15 @@ app.use((err, req, res, next) => {
 // ============================================
 
 const PORT = process.env.PORT || 5000;
+const HOST = process.env.HOST || '0.0.0.0'; // Bind to all interfaces for AWS
 
-app.listen(PORT, () => {
+app.listen(PORT, HOST, () => {
   console.log('\n🚀 ========================================');
   console.log(`   Tally Backend Server Started`);
   console.log('   ========================================');
-  console.log(`   📍 Server: http://localhost:${PORT}`);
+  console.log(`   📍 Server: http://${HOST}:${PORT}`);
   console.log(`   🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`   🗄️  Database: PostgreSQL (AWS RDS)`);
+  console.log(`   🗄️  Database: ${process.env.DB_TYPE === 'mongodb' ? 'MongoDB (Testing)' : 'PostgreSQL (AWS RDS)'}`);
   console.log(`   📊 Tally Host: ${process.env.TALLY_HOST || 'Not configured'}`);
   console.log('   ========================================\n');
 });
