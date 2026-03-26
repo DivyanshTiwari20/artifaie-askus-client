@@ -9,6 +9,8 @@ const cors = require('cors');
 const { connectDatabase } = require('./config/database');
 const authRoutes = require('./routes/authRoutes');
 const tallyRoutes = require('./routes/tallyRoutes');
+const taskRoutes = require('./routes/taskRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
 
 // Initialize Express app
 const app = express();
@@ -51,7 +53,7 @@ app.get('/', (req, res) => {
     success: true,
     message: 'Tally Mobile App Backend API',
     version: '1.0.0',
-    database: process.env.DB_TYPE === 'mongodb' ? 'MongoDB (Local/Atlas)' : 'PostgreSQL (AWS RDS)',
+    database: 'PostgreSQL (AWS RDS)',
     endpoints: {
       health: '/health',
       auth: '/api/auth/*',
@@ -74,6 +76,10 @@ app.use('/api/auth', authRoutes);
 
 // Tally data routes
 app.use('/api/tally', tallyRoutes);
+
+// Tasks and Notifications routes
+app.use('/api/tasks', taskRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // 404 handler - Route not found
 app.use((req, res) => {
@@ -108,7 +114,7 @@ app.listen(PORT, HOST, () => {
   console.log('   ========================================');
   console.log(`   📍 Server: http://${HOST}:${PORT}`);
   console.log(`   🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`   🗄️  Database: ${process.env.DB_TYPE === 'mongodb' ? 'MongoDB (Testing)' : 'PostgreSQL (AWS RDS)'}`);
+  console.log(`   🗄️  Database: PostgreSQL (AWS RDS)`);
   console.log(`   📊 Tally Host: ${process.env.TALLY_HOST || 'Not configured'}`);
   console.log('   ========================================\n');
 });

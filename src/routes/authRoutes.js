@@ -148,8 +148,8 @@ router.get('/me', protect, async (req, res) => {
   }
 });
 
-// Get all users (Admin only)
-router.get('/users', protect, authorize('admin'), async (req, res) => {
+// Get all users (Admin/Manager)
+router.get('/users', protect, authorize('admin', 'manager'), async (req, res) => {
   try {
     const users = await User.findAll();
     res.status(200).json({

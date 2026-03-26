@@ -1,7 +1,3 @@
-// src/config/database.js
-// This file handles database connections (MongoDB for testing, PostgreSQL for production)
-
-const mongoose = require('mongoose');
 const { Pool } = require('pg');
 
 /**
@@ -26,6 +22,8 @@ const initializePostgres = async () => {
   const client = await pool.connect();
   try {
     await client.query('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"');
+
+    // Users table
     await client.query(`
       CREATE TABLE IF NOT EXISTS users (
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -37,12 +35,51 @@ const initializePostgres = async () => {
         allowed_companies TEXT[] DEFAULT '{}',
         employee_id VARCHAR(255),
         department VARCHAR(255),
+        phone VARCHAR(50),
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
     await client.query('CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)');
-    console.log('✅ PostgreSQL tables initialized successfully');
+
+    // Tasks table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS tasks (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        title VARCHAR(500) NOT NULL,
+        description TEXT,
+        category VARCHAR(100) DEFAULT 'General',
+        status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'completed', 'cancelled')),
+        priority VARCHAR(50) DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high', 'urgent')),
+        assigned_to UUID REFERENCES users(id) ON DELETE SET NULL,
+        assigned_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        client_name VARCHAR(255),
+        due_date TIMESTAMPTZ,
+        completed_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query('CREATE INDEX IF NOT EXISTS idx_tasks_assigned_to ON tasks(assigned_to)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)');
+
+    // Notifications table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        title VARCHAR(500) NOT NULL,
+        message TEXT NOT NULL,
+        type VARCHAR(50) DEFAULT 'task' CHECK (type IN ('task', 'announcement', 'reminder', 'alert')),
+        is_read BOOLEAN DEFAULT false,
+        related_task_id UUID REFERENCES tasks(id) ON DELETE SET NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query('CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read)');
+
+    console.log('✅ PostgreSQL tables initialized successfully (users, tasks, notifications)');
   } catch (error) {
     console.error('❌ Error initializing PostgreSQL tables:', error.message);
     throw error;
@@ -55,31 +92,20 @@ const initializePostgres = async () => {
  * Connect to Database
  */
 const connectDatabase = async () => {
-  const dbType = process.env.DB_TYPE || 'postgres';
+  try {
+    const client = await pool.connect();
+    const result = await client.query('SELECT NOW() as current_time, current_database() as db_name');
+    client.release();
 
-  if (dbType === 'mongodb') {
-    try {
-      const conn = await mongoose.connect(process.env.MONGODB_URI);
-      console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
-    } catch (error) {
-      console.error(`❌ MongoDB Connection Error: ${error.message}`);
-      process.exit(1);
-    }
-  } else {
-    try {
-      const client = await pool.connect();
-      const result = await client.query('SELECT NOW() as current_time, current_database() as db_name');
-      client.release();
+    console.log(`✅ PostgreSQL Connected: ${process.env.PG_HOST}`);
+    console.log(`📊 Database Name: ${result.rows[0].db_name}`);
 
-      console.log(`✅ PostgreSQL Connected: ${process.env.PG_HOST}`);
-      console.log(`📊 Database Name: ${result.rows[0].db_name}`);
-
-      await initializePostgres();
-    } catch (error) {
-      console.warn(`⚠️  PostgreSQL Connection Warning: ${error.message}`);
-      console.warn(`⚠️  Database features (auth/users) will not work.`);
-      console.warn(`⚠️  Update .env with valid PG_* credentials for final AWS deployment.\n`);
-    }
+    await initializePostgres();
+  } catch (error) {
+    console.error(`❌ PostgreSQL Connection Error: ${error.message}`);
+    console.error(`⚠️  Database features (auth/users) will not work until PG_* credentials are fixed.`);
+    // In production, we might want to exit, but for now we'll just log
+    // process.exit(1);
   }
 };
 
