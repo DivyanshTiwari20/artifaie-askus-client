@@ -135,7 +135,7 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        d:work	ally-backend{this.companyName ? <SVCURRENTCOMPANY>d:work	ally-backend{this.companyName}</SVCURRENTCOMPANY> : <!-- No specific company -->}
+        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
       </STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
@@ -1840,66 +1840,6 @@ class TallyService {
   // ============================================
 
   buildEnhancedBalanceSheetXMLRequest(fromDate, toDate) {
-    return `<ENVELOPE>
-  <HEADER>
-    <VERSION>1</VERSION>
-    <TALLYREQUEST>Export</TALLYREQUEST>
-    <TYPE>Data</TYPE>
-    <ID>Balance Sheet</ID>
-  </HEADER>
-  <BODY>
-    <DESC>
-      <STATICVARIABLES>
-        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
-        \
-        d:work	ally-backend{this.companyName ? <SVCURRENTCOMPANY>d:work	ally-backend{this.companyName}</SVCURRENTCOMPANY> : <!-- No specific company -->}
-        \
-        d:work	ally-backend{fromDate ? <SVFROMDATE>d:work	ally-backend{fromDate}</SVFROMDATE> : <!-- Default from date -->}
-        \
-        d:work	ally-backend{toDate ? <SVTODATE>d:work	ally-backend{toDate}</SVTODATE> : <!-- Default to date -->}
-        <EXPLODEFLAG>Yes</EXPLODEFLAG>
-      </STATICVARIABLES>
-    </DESC>
-  </BODY>
-</ENVELOPE>`;
-  }
-
-  buildBalanceSheetGroupsXMLRequest(fromDate, toDate) {
-    return `<ENVELOPE>
-  <HEADER>
-    <VERSION>1</VERSION>
-    <TALLYREQUEST>Export</TALLYREQUEST>
-    <TYPE>Collection</TYPE>
-    <ID>BSGroups</ID>
-  </HEADER>
-  <BODY>
-    <DESC>
-      <STATICVARIABLES>
-        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
-        \
-        d:work	ally-backend{this.companyName ? <SVCURRENTCOMPANY>d:work	ally-backend{this.companyName}</SVCURRENTCOMPANY> : <!-- No specific company -->}
-        \
-        d:work	ally-backend{fromDate ? <SVFROMDATE>d:work	ally-backend{fromDate}</SVFROMDATE> : <!-- Default from date -->}
-        \
-        d:work	ally-backend{toDate ? <SVTODATE>d:work	ally-backend{toDate}</SVTODATE> : <!-- Default to date -->}
-      </STATICVARIABLES>
-      <TDL>
-        <TDLMESSAGE>
-          <COLLECTION NAME="BSGroups">
-            <TYPE>Ledger</TYPE>
-            <FETCH>NAME, PARENT, CLOSINGBALANCE, OPENINGBALANCE</FETCH>
-            <FILTER>BSGroupFilter</FILTER>
-          </COLLECTION>
-          <SYSTEM TYPE="Formulae" NAME="BSGroupFilter">NOT $$IsRevenue:$PARENT</SYSTEM>
-        </TDLMESSAGE>
-      </TDL>
-    </DESC>
-  </BODY>
-</ENVELOPE>`;
-  }
-
-  async getEnhancedBalanceSheet(fromDate, toDate, compareDate) {
-    try {
       const tasks = [
         this.sendRequest(this.buildEnhancedBalanceSheetXMLRequest(fromDate, toDate)),
         this.sendRequest(this.buildBalanceSheetGroupsXMLRequest(fromDate, toDate)).catch(() => null),
