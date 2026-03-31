@@ -101,14 +101,14 @@ router.post('/', protect, async (req, res) => {
 /**
  * @route   GET /api/tasks
  * @desc    Get tasks (filter by assignedTo, status)
- * @access  Private (Admins/Managers see all unless filtered, Employees only see theirs)
+ * @access  Private (Admins see all unless filtered, Managers/Employees only see theirs)
  */
 router.get('/', protect, async (req, res) => {
   try {
     let { assignedTo, status, limit, offset } = req.query;
 
-    // Security: Employees can only view their own tasks
-    if (req.user.role === 'employee') {
+    // Security: Employees and Managers can only view their own tasks
+    if (req.user.role === 'employee' || req.user.role === 'manager') {
       assignedTo = req.user.id;
     }
 
