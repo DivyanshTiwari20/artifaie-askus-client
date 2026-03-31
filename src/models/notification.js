@@ -2,6 +2,7 @@
 // Notification model for PostgreSQL
 
 const { pool } = require('../config/database');
+const axios = require('axios');
 
 const Notification = {
   /**
@@ -15,42 +16,50 @@ const Notification = {
     `;
     const values = [userId, title, message, type, relatedTaskId];
     const result = await pool.query(query, values);
-    return this._format(result.rows[0]);
+    const notificationRecord = result.rows[0];
+
+    // Try sending an Expo Push Notification
+    try {
+      const userRes = await pool.query('SELECT expo_push_token FROM users WHERE id = $1', [userId]);
+      const pushToken = userRes.rows[0]?.expo_push_token;
+      
+      if (pushToken && pushToken.startsWith('ExponentPushToken')) {
+        axios.post('https://exp.host/--/api/v2/push/send', {
+          to: pushToken,
+          title: title,
+          body: message,
+          data: { relatedTaskId, type, notificationId: notificationRecord.id },
+          sound: 'default'
+        }, {
+          headers: {
+            'Accept': 'application/json',
+            'Accept-encoding': 'gzip, deflate',
+            'Content-Type': 'application/json'
+          }
+        }).catch(err => console.error('Error sending push:', err.message));
+      }
+    } catch (pushErr) {
+      console.error('Failed to get push token:', pushErr.message);
+    }
+
+    return this._format(notificationRecord);
   },
 
   /**
    * Get notifications for a user based on role and mode
    */
   async findForUser(user, mode, limit = 50, offset = 0) {
-    let query = `SELECT n.* FROM notifications n `;
-    let values = [];
-    let paramIndex = 1;
-
-    if (user.role === 'admin' || user.role === 'manager') {
-      query += ` LEFT JOIN users u ON n.user_id = u.id WHERE 1=1 `;
-    } else {
-      query += ` WHERE n.user_id = $1 `;
-      values.push(user.id);
-      paramIndex++;
-    }
+    let query = `SELECT * FROM notifications WHERE user_id = $1 `;
+    let values = [user.id];
+    let paramIndex = 2;
 
     if (mode === 'task') {
-      query += ` AND n.type IN ('task', 'alert') `;
+      query += ` AND type IN ('task', 'alert') `;
     } else if (mode === 'general') {
-      query += ` AND n.type NOT IN ('task', 'alert') `;
+      query += ` AND type NOT IN ('task', 'alert') `;
     }
 
-    if (user.role === 'admin') {
-      query += ` AND (n.user_id = $${paramIndex} OR u.role IN ('manager', 'employee')) `;
-      values.push(user.id);
-      paramIndex++;
-    } else if (user.role === 'manager') {
-      query += ` AND (n.user_id = $${paramIndex} OR u.role = 'employee') `;
-      values.push(user.id);
-      paramIndex++;
-    }
-
-    query += ` ORDER BY n.created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex+1}`;
+    query += ` ORDER BY created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex+1}`;
     values.push(limit, offset);
 
     const result = await pool.query(query, values);
@@ -98,30 +107,13 @@ const Notification = {
    * Get unread count for a user
    */
   async getUnreadCountForUser(user, mode) {
-    let query = `SELECT COUNT(*) FROM notifications n `;
-    let values = [];
-    let paramIndex = 1;
-
-    if (user.role === 'admin' || user.role === 'manager') {
-      query += ` LEFT JOIN users u ON n.user_id = u.id WHERE n.is_read = false `;
-    } else {
-      query += ` WHERE n.user_id = $1 AND n.is_read = false `;
-      values.push(user.id);
-      paramIndex++;
-    }
+    let query = `SELECT COUNT(*) FROM notifications WHERE user_id = $1 AND is_read = false `;
+    let values = [user.id];
 
     if (mode === 'task') {
-      query += ` AND n.type IN ('task', 'alert') `;
+      query += ` AND type IN ('task', 'alert') `;
     } else if (mode === 'general') {
-      query += ` AND n.type NOT IN ('task', 'alert') `;
-    }
-
-    if (user.role === 'admin') {
-      query += ` AND (n.user_id = $${paramIndex} OR u.role IN ('manager', 'employee')) `;
-      values.push(user.id);
-    } else if (user.role === 'manager') {
-      query += ` AND (n.user_id = $${paramIndex} OR u.role = 'employee') `;
-      values.push(user.id);
+      query += ` AND type NOT IN ('task', 'alert') `;
     }
 
     const result = await pool.query(query, values);

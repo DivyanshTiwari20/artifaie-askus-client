@@ -53,19 +53,35 @@ router.post('/', protect, async (req, res) => {
       task.status = status;
     }
 
-    // Create notification for assignee or log creation
-    const notifyUserId = req.user.role === 'employee' ? req.user.id : assignedTo;
-    const notifyMessage = req.user.role === 'employee' 
-      ? `You logged a new task: "${title}"` 
-      : `${req.user.name} assigned you a new ${priority} priority task: "${title}"`;
+    if (req.user.role === 'employee') {
+      await Notification.create({
+        userId: req.user.id,
+        title: 'New Task Logged',
+        message: `You logged a new task: "${title}"`,
+        type: 'task',
+        relatedTaskId: task.id,
+      });
+    } else {
+      // Notify assignee
+      await Notification.create({
+        userId: assignedTo,
+        title: 'New Task Assigned',
+        message: `${req.user.name} assigned you a new ${priority || 'normal'} priority task: "${title}"`,
+        type: 'task',
+        relatedTaskId: task.id,
+      });
 
-    await Notification.create({
-      userId: notifyUserId,
-      title: req.user.role === 'employee' ? 'New Task Logged' : 'New Task Assigned',
-      message: notifyMessage,
-      type: 'task',
-      relatedTaskId: task.id,
-    });
+      // Notify assigner (admin/manager)
+      if (req.user.id !== assignedTo) {
+        await Notification.create({
+          userId: req.user.id,
+          title: 'Task Assigned Successfully',
+          message: `You assigned a new ${priority || 'normal'} priority task to ${assignee.name}: "${title}"`,
+          type: 'task',
+          relatedTaskId: task.id,
+        });
+      }
+    }
 
     res.status(201).json({
       success: true,

@@ -199,6 +199,19 @@ router.put('/update-password', protect, async (req, res) => {
   }
 });
 
+// Update Push Token
+router.put('/push-token', protect, async (req, res) => {
+  try {
+    const { pushToken } = req.body;
+    const { pool } = require('../config/database');
+    await pool.query('UPDATE users SET expo_push_token = $1 WHERE id = $2', [pushToken, req.user.id]);
+    res.status(200).json({ success: true, message: 'Push token updated' });
+  } catch (error) {
+    console.error('Update push token error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 // Get current user
 router.get('/me', protect, async (req, res) => {
   try {
