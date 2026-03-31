@@ -1840,12 +1840,62 @@ class TallyService {
   // ============================================
 
   buildEnhancedBalanceSheetXMLRequest(fromDate, toDate) {
+    return `<ENVELOPE>
+  <HEADER>
+    <VERSION>1</VERSION>
+    <TALLYREQUEST>Export</TALLYREQUEST>
+    <TYPE>Data</TYPE>
+    <ID>Balance Sheet</ID>
+  </HEADER>
+  <BODY>
+    <DESC>
+      <STATICVARIABLES>
+        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : '<!-- No specific company -->'}
+        ${fromDate ? `<SVFROMDATE>${fromDate}</SVFROMDATE>` : '<!-- Default from date -->'}
+        ${toDate ? `<SVTODATE>${toDate}</SVTODATE>` : '<!-- Default to date -->'}
+      </STATICVARIABLES>
+    </DESC>
+  </BODY>
+</ENVELOPE>`;
+  }
+
+  buildBalanceSheetGroupsXMLRequest(fromDate, toDate) {
+    return `<ENVELOPE>
+  <HEADER>
+    <VERSION>1</VERSION>
+    <TALLYREQUEST>Export</TALLYREQUEST>
+    <TYPE>Collection</TYPE>
+    <ID>BSGroupLedgers</ID>
+  </HEADER>
+  <BODY>
+    <DESC>
+      <STATICVARIABLES>
+        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : '<!-- No specific company -->'}
+        ${fromDate ? `<SVFROMDATE>${fromDate}</SVFROMDATE>` : '<!-- Default from date -->'}
+        ${toDate ? `<SVTODATE>${toDate}</SVTODATE>` : '<!-- Default to date -->'}
+      </STATICVARIABLES>
+      <TDL>
+        <TDLMESSAGE>
+          <COLLECTION NAME="BSGroupLedgers">
+            <TYPE>Ledger</TYPE>
+            <FETCH>NAME, PARENT, CLOSINGBALANCE, OPENINGBALANCE</FETCH>
+          </COLLECTION>
+        </TDLMESSAGE>
+      </TDL>
+    </DESC>
+  </BODY>
+</ENVELOPE>`;
+  }
+
+  async getEnhancedBalanceSheet(fromDate, toDate, compareDate) {
+    try {
       const tasks = [
         this.sendRequest(this.buildEnhancedBalanceSheetXMLRequest(fromDate, toDate)),
         this.sendRequest(this.buildBalanceSheetGroupsXMLRequest(fromDate, toDate)).catch(() => null),
       ];
 
-      // If compareDate is provided, fetch a second balance sheet
       if (compareDate) {
         tasks.push(
           this.sendRequest(this.buildEnhancedBalanceSheetXMLRequest(fromDate, compareDate)).catch(() => null)
