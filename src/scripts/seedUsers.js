@@ -8,7 +8,7 @@ const usersToSeed = [
   { name: 'Ashish Asthana', role: 'admin' },
   { name: 'Sharaf abbas Khan', role: 'admin' },
   { name: 'Abhishek Asthana', role: 'admin' },
-  
+
   // Manager
   { name: 'Anshuman Asthana', role: 'manager' },
 
@@ -28,7 +28,7 @@ const usersToSeed = [
 const seedUsers = async () => {
   try {
     console.log('🌱 Starting user seeding...');
-    
+
     // Check if users already exist to avoid duplicates
     const checkQuery = await pool.query('SELECT COUNT(*) FROM users');
     if (parseInt(checkQuery.rows[0].count) > 0) {
@@ -41,10 +41,10 @@ const seedUsers = async () => {
     for (const user of usersToSeed) {
       // Generate dummy email from name
       const email = user.name.toLowerCase().replace(/[^a-z0-9]/g, '.') + '@artifaie.com';
-      
+
       // Check if email already installed
       const exists = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
-      
+
       if (exists.rows.length === 0) {
         await pool.query(
           `INSERT INTO users (name, email, password, role, is_active)

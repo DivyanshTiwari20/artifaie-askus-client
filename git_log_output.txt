@@ -1,0 +1,10 @@
+﻿b7ad88d 2026-03-28 18:22:39 +0530 checkout: temporary commit for worktree checkout
+bf22c3e 2026-03-28 12:20:27 +0530 feat: implement user authentication system with dual MongoDB and PostgreSQL model support
+4891dfa 2026-03-27 19:29:22 +0530 Fix Tally routes and date handling
+fdb5c7e 2026-03-27 15:54:23 +0530 feat: Implement initial backend server setup with user authentication, PostgreSQL/MongoDB database configuration, and core routes.
+d8dd0b5 2026-03-27 15:48:48 +0530 feat: Introduce Tally API communication service and enhanced balance sheet retrieval.
+b82fbc9 2026-03-26 14:35:07 +0530 Frontend: API integration, crash fixes, and update password screen
+8ddf85c 2026-03-26 13:48:13 +0530 Added Phase 2 backend architecture and Employee seeder
+37c0478 2026-03-26 13:37:07 +0530 Phase 2: Added Postgres Models, Tasks, Notifications, and seed scripts
+043763f 2026-03-18 00:02:06 +0530 feat: Implement user authentication, user models for PostgreSQL and MongoDB, and flexible database connection setup.
+1921efe 2026-03-14 15:32:35 +0530 feat: Implement initial Tally backend with data derivation logic, API services, and authentication.

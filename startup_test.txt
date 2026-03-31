@@ -1,0 +1,38 @@
+﻿[dotenv@17.2.3] injecting env (12) from .env -- tip: ≡ƒôí add observability to secrets: https://dotenvx.com/ops
+≡ƒöô HTTP (No SSL) detected
+
+≡ƒÜÇ ========================================
+   Tally Backend Server Started
+   ========================================
+   ≡ƒôì Server: http://0.0.0.0:5000
+   ≡ƒîì Environment: development
+   ≡ƒùä∩╕Å  Database: PostgreSQL (AWS RDS)
+   ≡ƒôè Tally Host: http://103.171.134.4:16937
+   ========================================
+
+node : Γ¥î PostgreSQL 
+Connection Error: 
+getaddrinfo ENOTFOUND your
+-rds-endpoint.amazonaws.co
+m
+At line:1 char:30
++ ... velopment'; node -e 
+"try { require('./src/serv
+er.js'); } catch(e) { c 
+...
++                 ~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo        
+      : NotSpecified: (Γ  
+  ¥î PostgreSQL ...t.am   
+ azonaws.com:String) [    
+], RemoteException
+    + FullyQualifiedError 
+   Id : NativeCommandErr  
+  or
+ 
+ΓÜá∩╕Å  Database features 
+(auth/users) will not 
+work until PG_* 
+credentials are fixed.

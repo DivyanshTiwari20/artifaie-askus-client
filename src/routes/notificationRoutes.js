@@ -13,14 +13,15 @@ const { protect } = require('../middleware/auth');
  */
 router.get('/', protect, async (req, res) => {
   try {
-    const { limit, offset } = req.query;
-    const notifications = await Notification.findByUserId(
-      req.user.id,
+    const { limit, offset, mode } = req.query;
+    const notifications = await Notification.findForUser(
+      req.user,
+      mode,
       parseInt(limit) || 50,
       parseInt(offset) || 0
     );
 
-    const unreadCount = await Notification.getUnreadCount(req.user.id);
+    const unreadCount = await Notification.getUnreadCountForUser(req.user, mode);
 
     res.status(200).json({
       success: true,

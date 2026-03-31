@@ -19,16 +19,41 @@ const Notification = {
   },
 
   /**
-   * Get notifications for a user
+   * Get notifications for a user based on role and mode
    */
-  async findByUserId(userId, limit = 50, offset = 0) {
-    const query = `
-      SELECT * FROM notifications 
-      WHERE user_id = $1 
-      ORDER BY created_at DESC
-      LIMIT $2 OFFSET $3
-    `;
-    const result = await pool.query(query, [userId, limit, offset]);
+  async findForUser(user, mode, limit = 50, offset = 0) {
+    let query = `SELECT n.* FROM notifications n `;
+    let values = [];
+    let paramIndex = 1;
+
+    if (user.role === 'admin' || user.role === 'manager') {
+      query += ` LEFT JOIN users u ON n.user_id = u.id WHERE 1=1 `;
+    } else {
+      query += ` WHERE n.user_id = $1 `;
+      values.push(user.id);
+      paramIndex++;
+    }
+
+    if (mode === 'task') {
+      query += ` AND n.type IN ('task', 'alert') `;
+    } else if (mode === 'general') {
+      query += ` AND n.type NOT IN ('task', 'alert') `;
+    }
+
+    if (user.role === 'admin') {
+      query += ` AND (n.user_id = $${paramIndex} OR u.role IN ('manager', 'employee')) `;
+      values.push(user.id);
+      paramIndex++;
+    } else if (user.role === 'manager') {
+      query += ` AND (n.user_id = $${paramIndex} OR u.role = 'employee') `;
+      values.push(user.id);
+      paramIndex++;
+    }
+
+    query += ` ORDER BY n.created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex+1}`;
+    values.push(limit, offset);
+
+    const result = await pool.query(query, values);
     return result.rows.map(row => this._format(row));
   },
 
@@ -72,9 +97,34 @@ const Notification = {
   /**
    * Get unread count for a user
    */
-  async getUnreadCount(userId) {
-    const query = `SELECT COUNT(*) FROM notifications WHERE user_id = $1 AND is_read = false`;
-    const result = await pool.query(query, [userId]);
+  async getUnreadCountForUser(user, mode) {
+    let query = `SELECT COUNT(*) FROM notifications n `;
+    let values = [];
+    let paramIndex = 1;
+
+    if (user.role === 'admin' || user.role === 'manager') {
+      query += ` LEFT JOIN users u ON n.user_id = u.id WHERE n.is_read = false `;
+    } else {
+      query += ` WHERE n.user_id = $1 AND n.is_read = false `;
+      values.push(user.id);
+      paramIndex++;
+    }
+
+    if (mode === 'task') {
+      query += ` AND n.type IN ('task', 'alert') `;
+    } else if (mode === 'general') {
+      query += ` AND n.type NOT IN ('task', 'alert') `;
+    }
+
+    if (user.role === 'admin') {
+      query += ` AND (n.user_id = $${paramIndex} OR u.role IN ('manager', 'employee')) `;
+      values.push(user.id);
+    } else if (user.role === 'manager') {
+      query += ` AND (n.user_id = $${paramIndex} OR u.role = 'employee') `;
+      values.push(user.id);
+    }
+
+    const result = await pool.query(query, values);
     return parseInt(result.rows[0].count, 10);
   },
 

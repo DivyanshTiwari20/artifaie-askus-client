@@ -13,9 +13,13 @@ const { protect, authorize } = require('../middleware/auth');
  * @desc    Create a new task and notify the assignee
  * @access  Private (Admin & Manager only)
  */
-router.post('/', protect, authorize('admin', 'manager'), async (req, res) => {
+router.post('/', protect, async (req, res) => {
   try {
-    const { title, description, category, priority, assignedTo, clientName, dueDate } = req.body;
+    let { title, description, category, priority, assignedTo, clientName, dueDate, status } = req.body;
+
+    if (req.user.role === 'employee') {
+      assignedTo = req.user.id;
+    }
 
     if (!title || !assignedTo) {
       return res.status(400).json({
@@ -44,11 +48,21 @@ router.post('/', protect, authorize('admin', 'manager'), async (req, res) => {
       dueDate,
     });
 
-    // Create notification for assignee
+    if (status) {
+      await Task.updateStatus(task.id, status);
+      task.status = status;
+    }
+
+    // Create notification for assignee or log creation
+    const notifyUserId = req.user.role === 'employee' ? req.user.id : assignedTo;
+    const notifyMessage = req.user.role === 'employee' 
+      ? `You logged a new task: "${title}"` 
+      : `${req.user.name} assigned you a new ${priority} priority task: "${title}"`;
+
     await Notification.create({
-      userId: assignedTo,
-      title: 'New Task Assigned',
-      message: `${req.user.name} assigned you a new ${priority} priority task: "${title}"`,
+      userId: notifyUserId,
+      title: req.user.role === 'employee' ? 'New Task Logged' : 'New Task Assigned',
+      message: notifyMessage,
       type: 'task',
       relatedTaskId: task.id,
     });

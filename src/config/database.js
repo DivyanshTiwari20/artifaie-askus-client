@@ -77,9 +77,24 @@ const initializePostgres = async () => {
       )
     `);
     await client.query('CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id)');
-    await client.query('CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read)');
+    // Clients table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS clients (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        name VARCHAR(255) NOT NULL,
+        phone VARCHAR(50),
+        email VARCHAR(255),
+        location VARCHAR(500),
+        contact_person VARCHAR(255),
+        license_num VARCHAR(255),
+        license_expire TIMESTAMPTZ,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query('CREATE INDEX IF NOT EXISTS idx_clients_name ON clients(name)');
 
-    console.log('✅ PostgreSQL tables initialized successfully (users, tasks, notifications)');
+    console.log('✅ PostgreSQL tables initialized successfully (users, tasks, notifications, clients)');
   } catch (error) {
     console.error('❌ Error initializing PostgreSQL tables:', error.message);
     throw error;

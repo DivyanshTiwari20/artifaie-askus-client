@@ -1,0 +1,36 @@
+﻿HASH:b7ad88d DATE:2026-03-28 18:22:39 +0530
+MSG:checkout: temporary commit for worktree checkout
+---
+HASH:bf22c3e DATE:2026-03-28 12:20:27 +0530
+MSG:feat: implement user authentication system with dual MongoDB and PostgreSQL model support
+---
+HASH:4891dfa DATE:2026-03-27 19:29:22 +0530
+MSG:Fix Tally routes and date handling
+---
+HASH:fdb5c7e DATE:2026-03-27 15:54:23 +0530
+MSG:feat: Implement initial backend server setup with user authentication, PostgreSQL/MongoDB database configuration, and core routes.
+---
+HASH:d8dd0b5 DATE:2026-03-27 15:48:48 +0530
+MSG:feat: Introduce Tally API communication service and enhanced balance sheet retrieval.
+---
+HASH:b82fbc9 DATE:2026-03-26 14:35:07 +0530
+MSG:Frontend: API integration, crash fixes, and update password screen
+---
+HASH:8ddf85c DATE:2026-03-26 13:48:13 +0530
+MSG:Added Phase 2 backend architecture and Employee seeder
+---
+HASH:37c0478 DATE:2026-03-26 13:37:07 +0530
+MSG:Phase 2: Added Postgres Models, Tasks, Notifications, and seed scripts
+---
+HASH:043763f DATE:2026-03-18 00:02:06 +0530
+MSG:feat: Implement user authentication, user models for PostgreSQL and MongoDB, and flexible database connection setup.
+---
+HASH:1921efe DATE:2026-03-14 15:32:35 +0530
+MSG:feat: Implement initial Tally backend with data derivation logic, API services, and authentication.
+---
+HASH:f91d44d DATE:2025-12-20 15:32:08 +0530
+MSG:first commit
+---
+HASH:853b050 DATE:2025-12-20 15:31:41 +0530
+MSG:first commit
+---
