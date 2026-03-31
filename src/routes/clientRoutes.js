@@ -74,4 +74,58 @@ router.get('/', protect, async (req, res) => {
   }
 });
 
+/**
+ * @route   GET /api/clients/:id
+ * @desc    Get a single client by ID
+ * @access  Private
+ */
+router.get('/:id', protect, async (req, res) => {
+  try {
+    const client = await Client.findById(req.params.id);
+    if (!client) {
+      return res.status(404).json({ success: false, message: 'Client not found' });
+    }
+    res.status(200).json({ success: true, data: client });
+  } catch (error) {
+    console.error('Error fetching client:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch client' });
+  }
+});
+
+/**
+ * @route   PUT /api/clients/:id
+ * @desc    Update a client
+ * @access  Private (Admin & Manager only)
+ */
+router.put('/:id', protect, authorize('admin', 'manager'), async (req, res) => {
+  try {
+    const client = await Client.update(req.params.id, req.body);
+    if (!client) {
+      return res.status(404).json({ success: false, message: 'Client not found' });
+    }
+    res.status(200).json({ success: true, data: client, message: 'Client updated successfully' });
+  } catch (error) {
+    console.error('Error updating client:', error);
+    res.status(500).json({ success: false, message: 'Failed to update client' });
+  }
+});
+
+/**
+ * @route   DELETE /api/clients/:id
+ * @desc    Delete a client
+ * @access  Private (Admin & Manager only)
+ */
+router.delete('/:id', protect, authorize('admin', 'manager'), async (req, res) => {
+  try {
+    const success = await Client.delete(req.params.id);
+    if (!success) {
+      return res.status(404).json({ success: false, message: 'Client not found' });
+    }
+    res.status(200).json({ success: true, message: 'Client deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting client:', error);
+    res.status(500).json({ success: false, message: 'Failed to delete client' });
+  }
+});
+
 module.exports = router;

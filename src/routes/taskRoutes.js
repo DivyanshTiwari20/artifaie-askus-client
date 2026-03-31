@@ -252,4 +252,54 @@ router.get('/user/counts', protect, async (req, res) => {
   }
 });
 
+/**
+ * @route   PUT /api/tasks/:id
+ * @desc    Update task details (title, description, priority, etc.)
+ * @access  Private
+ */
+router.put('/:id', protect, async (req, res) => {
+  try {
+    let task = await Task.findById(req.params.id);
+    if (!task) {
+      return res.status(404).json({ success: false, message: 'Task not found' });
+    }
+
+    // Security: Employees can only update their own tasks
+    if (req.user.role === 'employee' && task.assignedTo !== req.user.id) {
+      return res.status(403).json({ success: false, message: 'Not authorized to update this task' });
+    }
+
+    task = await Task.update(req.params.id, req.body);
+    res.status(200).json({ success: true, data: task, message: 'Task updated successfully' });
+  } catch (error) {
+    console.error('Error updating task:', error);
+    res.status(500).json({ success: false, message: 'Failed to update task' });
+  }
+});
+
+/**
+ * @route   DELETE /api/tasks/:id
+ * @desc    Delete a task
+ * @access  Private
+ */
+router.delete('/:id', protect, async (req, res) => {
+  try {
+    const task = await Task.findById(req.params.id);
+    if (!task) {
+      return res.status(404).json({ success: false, message: 'Task not found' });
+    }
+
+    // Security: Employees can only delete their own tasks
+    if (req.user.role === 'employee' && task.assignedTo !== req.user.id) {
+      return res.status(403).json({ success: false, message: 'Not authorized to delete this task' });
+    }
+
+    await Task.delete(req.params.id);
+    res.status(200).json({ success: true, message: 'Task deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting task:', error);
+    res.status(500).json({ success: false, message: 'Failed to delete task' });
+  }
+});
+
 module.exports = router;

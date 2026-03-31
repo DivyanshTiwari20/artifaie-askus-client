@@ -4,9 +4,6 @@
 const { pool } = require('../config/database');
 
 const Client = {
-  /**
-   * Create a new client
-   */
   async create({ name, phone, email, location, contactPerson, licenseNum, licenseExpire }) {
     const query = `
       INSERT INTO clients (name, phone, email, location, contact_person, license_num, license_expire)
@@ -26,18 +23,12 @@ const Client = {
     return this._format(result.rows[0]);
   },
 
-  /**
-   * Get all clients
-   */
   async findAll({ limit = 50, offset = 0 } = {}) {
     let query = `SELECT * FROM clients ORDER BY created_at DESC LIMIT $1 OFFSET $2`;
     const result = await pool.query(query, [limit, offset]);
     return result.rows.map(row => this._format(row));
   },
 
-  /**
-   * Get a single client by ID
-   */
   async findById(id) {
     const query = `SELECT * FROM clients WHERE id = $1`;
     const result = await pool.query(query, [id]);
@@ -45,9 +36,43 @@ const Client = {
     return this._format(result.rows[0]);
   },
 
-  /**
-   * Format a client row
-   */
+  async update(id, updateData) {
+    const fields = [];
+    const values = [];
+    let paramCount = 0;
+    const fieldMap = {
+      name: 'name',
+      phone: 'phone',
+      email: 'email',
+      location: 'location',
+      contactPerson: 'contact_person',
+      licenseNum: 'license_num',
+      licenseExpire: 'license_expire',
+    };
+
+    for (const [key, dbField] of Object.entries(fieldMap)) {
+      if (updateData[key] !== undefined) {
+        paramCount++;
+        fields.push(`${dbField} = $${paramCount}`);
+        values.push(updateData[key]);
+      }
+    }
+    if (fields.length === 0) return this.findById(id);
+
+    fields.push('updated_at = NOW()');
+    paramCount++;
+    values.push(id);
+    const query = `UPDATE clients SET ${fields.join(', ')} WHERE id = $${paramCount} RETURNING *`;
+    const result = await pool.query(query, values);
+    if (result.rows.length === 0) return null;
+    return this._format(result.rows[0]);
+  },
+
+  async delete(id) {
+    const result = await pool.query('DELETE FROM clients WHERE id = $1 RETURNING id', [id]);
+    return result.rows.length > 0;
+  },
+
   _format(row) {
     if (!row) return null;
     return {
