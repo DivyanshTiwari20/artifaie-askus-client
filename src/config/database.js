@@ -94,6 +94,9 @@ const initializePostgres = async () => {
     `);
     await client.query('CREATE INDEX IF NOT EXISTS idx_clients_name ON clients(name)');
 
+    // Add expo_push_token column to users (safe to re-run)
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS expo_push_token VARCHAR(255)`);
+
     console.log('✅ PostgreSQL tables initialized successfully (users, tasks, notifications, clients)');
   } catch (error) {
     console.error('❌ Error initializing PostgreSQL tables:', error.message);
