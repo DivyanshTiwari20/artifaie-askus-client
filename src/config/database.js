@@ -94,6 +94,22 @@ const initializePostgres = async () => {
     `);
     await client.query('CREATE INDEX IF NOT EXISTS idx_clients_name ON clients(name)');
 
+    // Task Updates table (status update history / activity log)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS task_updates (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        task_id UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+        user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+        user_name VARCHAR(255),
+        title VARCHAR(500),
+        description TEXT,
+        status VARCHAR(50) NOT NULL CHECK (status IN ('pending', 'in_progress', 'completed', 'cancelled')),
+        previous_status VARCHAR(50),
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query('CREATE INDEX IF NOT EXISTS idx_task_updates_task_id ON task_updates(task_id)');
+
     // Add expo_push_token column to users (safe to re-run)
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS expo_push_token VARCHAR(255)`);
 

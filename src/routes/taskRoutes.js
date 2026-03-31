@@ -4,6 +4,7 @@
 const express = require('express');
 const router = express.Router();
 const Task = require('../models/task');
+const TaskUpdate = require('../models/taskUpdate');
 const Notification = require('../models/notification');
 const User = require('../models/user');
 const { protect, authorize } = require('../middleware/auth');
@@ -52,6 +53,17 @@ router.post('/', protect, async (req, res) => {
       await Task.updateStatus(task.id, status);
       task.status = status;
     }
+
+    // Log initial task creation as an update entry
+    await TaskUpdate.create({
+      taskId: task.id,
+      userId: req.user.id,
+      userName: req.user.name,
+      title: 'Task Created',
+      description: `Task "${title}" was created and assigned`,
+      status: status || 'pending',
+      previousStatus: null,
+    });
 
     if (req.user.role === 'employee') {
       await Notification.create({
@@ -134,8 +146,28 @@ router.get('/', protect, async (req, res) => {
 });
 
 /**
+ * @route   GET /api/tasks/user/counts
+ * @desc    Get aggregate counts of tasks for the logged in user
+ * @access  Private
+ */
+router.get('/user/counts', protect, async (req, res) => {
+  try {
+    const counts = await Task.getCountsForUser(req.user.id);
+    res.status(200).json({
+      success: true,
+      data: counts,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch task counts',
+    });
+  }
+});
+
+/**
  * @route   GET /api/tasks/:id
- * @desc    Get a single task by ID
+ * @desc    Get a single task by ID (includes update history)
  * @access  Private
  */
 router.get('/:id', protect, async (req, res) => {
@@ -157,9 +189,15 @@ router.get('/:id', protect, async (req, res) => {
       });
     }
 
+    // Include update history in task detail
+    const updates = await TaskUpdate.findByTaskId(req.params.id);
+
     res.status(200).json({
       success: true,
-      data: task,
+      data: {
+        ...task,
+        updates,
+      },
     });
   } catch (error) {
     console.error('Error fetching task:', error);
@@ -171,13 +209,135 @@ router.get('/:id', protect, async (req, res) => {
 });
 
 /**
+ * @route   GET /api/tasks/:id/updates
+ * @desc    Get all status updates for a task
+ * @access  Private
+ */
+router.get('/:id/updates', protect, async (req, res) => {
+  try {
+    const task = await Task.findById(req.params.id);
+
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        message: 'Task not found',
+      });
+    }
+
+    // Security: Employees can only view their own tasks
+    if (req.user.role === 'employee' && task.assignedTo !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to view this task',
+      });
+    }
+
+    const updates = await TaskUpdate.findByTaskId(req.params.id);
+
+    res.status(200).json({
+      success: true,
+      count: updates.length,
+      data: updates,
+    });
+  } catch (error) {
+    console.error('Error fetching task updates:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch task updates',
+    });
+  }
+});
+
+/**
+ * @route   POST /api/tasks/:id/updates
+ * @desc    Add a status update to a task (employee progress log)
+ * @access  Private
+ */
+router.post('/:id/updates', protect, async (req, res) => {
+  try {
+    const { title, description, status } = req.body;
+
+    if (!status) {
+      return res.status(400).json({
+        success: false,
+        message: 'Status is required',
+      });
+    }
+
+    const allowedStatuses = ['pending', 'in_progress', 'completed', 'cancelled'];
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: `Status must be one of: ${allowedStatuses.join(', ')}`,
+      });
+    }
+
+    let task = await Task.findById(req.params.id);
+
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        message: 'Task not found',
+      });
+    }
+
+    // Security: Employees can only update their own tasks
+    if (req.user.role === 'employee' && task.assignedTo !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to update this task',
+      });
+    }
+
+    const previousStatus = task.status;
+
+    // Create the update log entry
+    const update = await TaskUpdate.create({
+      taskId: req.params.id,
+      userId: req.user.id,
+      userName: req.user.name,
+      title: title || null,
+      description: description || null,
+      status,
+      previousStatus,
+    });
+
+    // Also update the task's actual status
+    task = await Task.updateStatus(req.params.id, status);
+
+    // Notify assigner if employee changes status
+    if (req.user.role === 'employee' && previousStatus !== status && task.assignedBy) {
+      await Notification.create({
+        userId: task.assignedBy,
+        title: `Task Status Updated`,
+        message: `${req.user.name} updated task "${task.title}" from ${previousStatus} to ${status}${title ? ` — ${title}` : ''}`,
+        type: 'alert',
+        relatedTaskId: task.id,
+      });
+    }
+
+    res.status(201).json({
+      success: true,
+      data: { task, update },
+      message: 'Task update logged successfully',
+    });
+  } catch (error) {
+    console.error('Error creating task update:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create task update',
+    });
+  }
+});
+
+/**
  * @route   PUT /api/tasks/:id/status
- * @desc    Update task status (e.g. mark completed)
+ * @desc    Update task status (e.g. mark completed) — also logs to update history
  * @access  Private
  */
 router.put('/:id/status', protect, async (req, res) => {
   try {
-    const { status } = req.body;
+    const { status, updateTitle, updateDescription } = req.body;
     let task = await Task.findById(req.params.id);
 
     if (!task) {
@@ -207,6 +367,19 @@ router.put('/:id/status', protect, async (req, res) => {
     const prevStatus = task.status;
     task = await Task.updateStatus(req.params.id, status);
 
+    // Log this status change in the update history
+    if (prevStatus !== status) {
+      await TaskUpdate.create({
+        taskId: task.id,
+        userId: req.user.id,
+        userName: req.user.name,
+        title: updateTitle || `Status changed to ${status}`,
+        description: updateDescription || null,
+        status,
+        previousStatus: prevStatus,
+      });
+    }
+
     // If an employee completes/cancels a task, notify the assigner
     if (req.user.role === 'employee' && prevStatus !== status && ['completed', 'cancelled'].includes(status) && task.assignedBy) {
       await Notification.create({
@@ -228,26 +401,6 @@ router.put('/:id/status', protect, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to update task status',
-    });
-  }
-});
-
-/**
- * @route   GET /api/tasks/user/counts
- * @desc    Get aggregate counts of tasks for the logged in user
- * @access  Private
- */
-router.get('/user/counts', protect, async (req, res) => {
-  try {
-    const counts = await Task.getCountsForUser(req.user.id);
-    res.status(200).json({
-      success: true,
-      data: counts,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch task counts',
     });
   }
 });
@@ -313,4 +466,3 @@ router.delete('/:id', protect, async (req, res) => {
 });
 
 module.exports = router;
-
