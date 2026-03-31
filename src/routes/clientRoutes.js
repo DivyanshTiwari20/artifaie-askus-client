@@ -50,9 +50,9 @@ router.post('/', protect, authorize('admin', 'manager'), async (req, res) => {
 /**
  * @route   GET /api/clients
  * @desc    Get all clients
- * @access  Private
+ * @access  Private (Admin & Manager only)
  */
-router.get('/', protect, async (req, res) => {
+router.get('/', protect, authorize('admin', 'manager'), async (req, res) => {
   try {
     const { limit, offset } = req.query;
     const clients = await Client.findAll({
@@ -77,9 +77,9 @@ router.get('/', protect, async (req, res) => {
 /**
  * @route   GET /api/clients/:id
  * @desc    Get a single client by ID
- * @access  Private
+ * @access  Private (Admin & Manager only)
  */
-router.get('/:id', protect, async (req, res) => {
+router.get('/:id', protect, authorize('admin', 'manager'), async (req, res) => {
   try {
     const client = await Client.findById(req.params.id);
     if (!client) {
@@ -129,3 +129,4 @@ router.delete('/:id', protect, authorize('admin', 'manager'), async (req, res) =
 });
 
 module.exports = router;
+

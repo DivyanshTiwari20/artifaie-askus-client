@@ -269,6 +269,16 @@ router.put('/:id', protect, async (req, res) => {
       return res.status(403).json({ success: false, message: 'Not authorized to update this task' });
     }
 
+    if (req.body.status !== undefined) {
+      const allowedStatuses = ['pending', 'in_progress', 'completed', 'cancelled'];
+      if (!allowedStatuses.includes(req.body.status)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Status must be one of: pending, in_progress, completed, cancelled',
+        });
+      }
+    }
+
     task = await Task.update(req.params.id, req.body);
     res.status(200).json({ success: true, data: task, message: 'Task updated successfully' });
   } catch (error) {
@@ -303,3 +313,4 @@ router.delete('/:id', protect, async (req, res) => {
 });
 
 module.exports = router;
+
