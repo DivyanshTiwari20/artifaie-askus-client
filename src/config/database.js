@@ -87,12 +87,14 @@ const initializePostgres = async () => {
         location VARCHAR(500),
         contact_person VARCHAR(255),
         license_num VARCHAR(255),
+        group_employee_ids UUID[] DEFAULT '{}',
         license_expire TIMESTAMPTZ,
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
     await client.query('CREATE INDEX IF NOT EXISTS idx_clients_name ON clients(name)');
+    await client.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS group_employee_ids UUID[] DEFAULT '{}'`);
 
     // Task Updates table (status update history / activity log)
     await client.query(`
@@ -148,4 +150,6 @@ pool.on('error', (err) => {
   console.error('❌ Unexpected PostgreSQL pool error:', err.message);
 });
 
-module.exports = { pool, connectDatabase };
+module.exports = { pool, connectDatabase };
+
+

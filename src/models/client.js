@@ -4,10 +4,28 @@
 const { pool } = require('../config/database');
 
 const Client = {
-  async create({ name, phone, email, location, contactPerson, licenseNum, licenseExpire }) {
+  async create({
+    name,
+    phone,
+    email,
+    location,
+    contactPerson,
+    licenseNum,
+    licenseExpire,
+    groupEmployeeIds,
+  }) {
     const query = `
-      INSERT INTO clients (name, phone, email, location, contact_person, license_num, license_expire)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      INSERT INTO clients (
+        name,
+        phone,
+        email,
+        location,
+        contact_person,
+        license_num,
+        group_employee_ids,
+        license_expire
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING *
     `;
     const values = [
@@ -17,6 +35,7 @@ const Client = {
       location || null,
       contactPerson || null,
       licenseNum || null,
+      Array.isArray(groupEmployeeIds) ? groupEmployeeIds : [],
       licenseExpire || null,
     ];
     const result = await pool.query(query, values);
@@ -24,9 +43,9 @@ const Client = {
   },
 
   async findAll({ limit = 50, offset = 0 } = {}) {
-    let query = `SELECT * FROM clients ORDER BY created_at DESC LIMIT $1 OFFSET $2`;
+    const query = `SELECT * FROM clients ORDER BY created_at DESC LIMIT $1 OFFSET $2`;
     const result = await pool.query(query, [limit, offset]);
-    return result.rows.map(row => this._format(row));
+    return result.rows.map((row) => this._format(row));
   },
 
   async findById(id) {
@@ -47,6 +66,7 @@ const Client = {
       location: 'location',
       contactPerson: 'contact_person',
       licenseNum: 'license_num',
+      groupEmployeeIds: 'group_employee_ids',
       licenseExpire: 'license_expire',
     };
 
@@ -54,7 +74,11 @@ const Client = {
       if (updateData[key] !== undefined) {
         paramCount++;
         fields.push(`${dbField} = $${paramCount}`);
-        values.push(updateData[key]);
+        if (key === 'groupEmployeeIds') {
+          values.push(Array.isArray(updateData[key]) ? updateData[key] : []);
+        } else {
+          values.push(updateData[key]);
+        }
       }
     }
     if (fields.length === 0) return this.findById(id);
@@ -83,6 +107,7 @@ const Client = {
       location: row.location,
       contactPerson: row.contact_person,
       licenseNum: row.license_num,
+      groupEmployeeIds: row.group_employee_ids || [],
       licenseExpire: row.license_expire,
       createdAt: row.created_at,
       updatedAt: row.updated_at,

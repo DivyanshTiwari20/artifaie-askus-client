@@ -13,7 +13,16 @@ const { protect, authorize } = require('../middleware/auth');
  */
 router.post('/', protect, authorize('admin', 'manager'), async (req, res) => {
   try {
-    const { name, phone, email, location, contactPerson, licenseNum, licenseExpire } = req.body;
+    const {
+      name,
+      phone,
+      email,
+      location,
+      contactPerson,
+      licenseNum,
+      licenseExpire,
+      groupEmployeeIds,
+    } = req.body;
 
     if (!name) {
       return res.status(400).json({
@@ -30,6 +39,7 @@ router.post('/', protect, authorize('admin', 'manager'), async (req, res) => {
       contactPerson,
       licenseNum,
       licenseExpire,
+      groupEmployeeIds,
     });
 
     res.status(201).json({
@@ -56,8 +66,8 @@ router.get('/', protect, authorize('admin', 'manager'), async (req, res) => {
   try {
     const { limit, offset } = req.query;
     const clients = await Client.findAll({
-      limit: parseInt(limit) || 50,
-      offset: parseInt(offset) || 0,
+      limit: parseInt(limit, 10) || 50,
+      offset: parseInt(offset, 10) || 0,
     });
 
     res.status(200).json({
@@ -129,4 +139,3 @@ router.delete('/:id', protect, authorize('admin', 'manager'), async (req, res) =
 });
 
 module.exports = router;
-
