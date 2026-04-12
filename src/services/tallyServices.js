@@ -116,7 +116,8 @@ class TallyService {
     const col = data.COLLECTION || data.collection;
     if (!col) return [];
     const c = this.unwrapFirst(col) || col;
-    const L = c.LEDGER;
+    let L = c?.LEDGER;
+    if (!L && data.LEDGER) L = data.LEDGER;
     if (!L) return [];
     return Array.isArray(L) ? L : [L];
   }
@@ -128,6 +129,131 @@ class TallyService {
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;');
+  }
+
+  /** Safe SVCURRENTCOMPANY fragment (company names may contain & etc.) */
+  currentCompanyXml() {
+    return this.companyName
+      ? `<SVCURRENTCOMPANY>${this.escapeXml(this.companyName)}</SVCURRENTCOMPANY>`
+      : '';
+  }
+
+  /** Parent group looks like Balance Sheet (exclude from P&L heuristics on full ledger export). */
+  isLikelyBalanceSheetLedgerParent(parentName) {
+    const p = (parentName || '').toLowerCase();
+    const hints = [
+      'bank account',
+      'bank accounts',
+      'cash-in-hand',
+      'cash in hand',
+      'sundry debtor',
+      'sundry creditor',
+      'sundry debtors',
+      'sundry creditors',
+      'capital',
+      'partner',
+      'loan',
+      'secured',
+      'unsecured',
+      'fixed asset',
+      'current asset',
+      'current liabilit',
+      'investment',
+      'deposit',
+      'stock-in-hand',
+      'stock in hand',
+      'inventory',
+      'suspense',
+    ];
+    return hints.some((h) => p.includes(h));
+  }
+
+  /**
+   * Classify a ledger under P&L by parent group name (works for custom / non-India charts).
+   * @returns {'revenue'|'expense'|'skip'}
+   */
+  classifyPLLedgerByParent(parentName) {
+    const p = (parentName || '').toLowerCase();
+    if (!p) return 'expense';
+    if (/\bprofit\b.*\bloss\b|\bloss\b.*\bprofit\b/.test(p) && !p.includes('income') && !p.includes('expense')) {
+      return 'skip';
+    }
+    const revenueHints = [
+      'income',
+      'sales',
+      'turnover',
+      'revenue',
+      'receipt',
+      'fees received',
+      'service charge',
+      'other income',
+      'direct income',
+      'indirect income',
+    ];
+    const expenseHints = [
+      'expense',
+      'purchase',
+      'cost of',
+      'cost of sales',
+      'cogs',
+      'duty',
+      'tax',
+      'depreciation',
+      'administrative',
+      'overhead',
+      'payroll',
+      'salary',
+      'rent',
+      'direct expense',
+      'indirect expense',
+      'charges',
+      'consumption',
+    ];
+    const looksRev = revenueHints.some((h) => p.includes(h));
+    const looksExp = expenseHints.some((h) => p.includes(h));
+    if (looksRev && !looksExp) return 'revenue';
+    if (looksExp) return 'expense';
+    if (looksRev) return 'revenue';
+    return 'expense';
+  }
+
+  /**
+   * All ledgers under Profit & Loss A/c (recursive). Works when Direct/Indirect * group names differ.
+   */
+  buildRecursiveProfitLossLedgersXMLRequest(fromDate, toDate, plGroupName) {
+    const g = this.escapeXml(plGroupName);
+    const safeId = String(plGroupName).replace(/[^A-Za-z0-9]/g, '_').slice(0, 36) || 'PL';
+    return `<ENVELOPE>
+  <HEADER>
+    <VERSION>1</VERSION>
+    <TALLYREQUEST>Export</TALLYREQUEST>
+    <TYPE>Collection</TYPE>
+    <ID>RecursivePL_${safeId}</ID>
+  </HEADER>
+  <BODY>
+    <DESC>
+      <STATICVARIABLES>
+        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+        \
+        ${this.currentCompanyXml()}
+        \
+        ${fromDate ? `<SVFROMDATE>${fromDate}</SVFROMDATE>` : ''}
+        \
+        ${toDate ? `<SVTODATE>${toDate}</SVTODATE>` : ''}
+      </STATICVARIABLES>
+      <TDL>
+        <TDLMESSAGE>
+          <COLLECTION NAME="RecursivePL_${safeId}">
+            <TYPE>Ledger</TYPE>
+            <CHILDOF>${g}</CHILDOF>
+            <BELONGSTO>Yes</BELONGSTO>
+            <FETCH>NAME, PARENT, CLOSINGBALANCE</FETCH>
+          </COLLECTION>
+        </TDLMESSAGE>
+      </TDL>
+    </DESC>
+  </BODY>
+</ENVELOPE>`;
   }
 
   /**
@@ -180,7 +306,7 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
+        ${this.currentCompanyXml()}
         \
         ${fromDate ? `<SVFROMDATE>${fromDate}</SVFROMDATE>` : ''}
         \
@@ -1191,7 +1317,7 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
+        ${this.currentCompanyXml()}
         \
         ${fromDate ? `<SVFROMDATE>${fromDate}</SVFROMDATE>` : ''}
         \
@@ -1221,7 +1347,7 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
+        ${this.currentCompanyXml()}
         \
         ${fromDate ? `<SVFROMDATE>${fromDate}</SVFROMDATE>` : ''}
         \
@@ -1243,8 +1369,10 @@ class TallyService {
 
   async getEnhancedProfitLoss(fromDate, toDate) {
     try {
-      const incomeGroups = ['Direct Incomes', 'Indirect Incomes'];
-      const expenseGroups = ['Direct Expenses', 'Indirect Expenses'];
+      const incomeGroups = ['Direct Incomes', 'Indirect Incomes', 'Sales Accounts'];
+      const expenseGroups = ['Direct Expenses', 'Indirect Expenses', 'Purchase Accounts'];
+      const plRootNames = ['Profit & Loss A/c', 'Profit and Loss A/c'];
+
       const plReq = this.sendRequest(this.buildEnhancedProfitLossXMLRequest(fromDate, toDate));
       const incomeReqs = incomeGroups.map((g) =>
         this.sendRequest(this.buildLedgersUnderGroupXMLRequest(g, fromDate, toDate)).catch(() => null)
@@ -1252,15 +1380,53 @@ class TallyService {
       const expenseReqs = expenseGroups.map((g) =>
         this.sendRequest(this.buildLedgersUnderGroupXMLRequest(g, fromDate, toDate)).catch(() => null)
       );
-      const results = await Promise.all([plReq, ...incomeReqs, ...expenseReqs]);
-      const plRes = results[0];
-      const incomeRes = results.slice(1, 1 + incomeGroups.length);
-      const expenseRes = results.slice(1 + incomeGroups.length);
+      const recursiveReqs = plRootNames.map((root) =>
+        this.sendRequest(this.buildRecursiveProfitLossLedgersXMLRequest(fromDate, toDate, root)).catch(() => null)
+      );
+      const allLedgersReq = this.sendRequest(this.buildLedgersXMLRequest(fromDate, toDate)).catch(() => null);
 
-      return this.parseEnhancedProfitLossResponse(plRes, incomeRes, expenseRes);
+      const results = await Promise.all([plReq, ...incomeReqs, ...expenseReqs, ...recursiveReqs, allLedgersReq]);
+      const plRes = results[0];
+      const nInc = incomeGroups.length;
+      const nExp = expenseGroups.length;
+      const nRec = plRootNames.length;
+      const incomeRes = results.slice(1, 1 + nInc);
+      const expenseRes = results.slice(1 + nInc, 1 + nInc + nExp);
+      const recursiveCandidates = results.slice(1 + nInc + nExp, 1 + nInc + nExp + nRec);
+      const allLedgersRes = results[1 + nInc + nExp + nRec];
+
+      return this.parseEnhancedProfitLossResponse(plRes, incomeRes, expenseRes, recursiveCandidates, allLedgersRes);
     } catch (error) {
       throw new Error(`Failed to get enhanced profit & loss: ${error.message}`);
     }
+  }
+
+  /**
+   * Split recursive P&L ledger export into income vs expense rows (parent-name heuristics).
+   */
+  splitRecursivePLResponseIntoRevenueExpense(parsed) {
+    const rows = this.extractLedgerListFromCollectionResponse(parsed);
+    const revenue = [];
+    const expense = [];
+    for (const l of rows) {
+      const parent = l.PARENT || '';
+      const side = this.classifyPLLedgerByParent(parent);
+      if (side === 'skip') continue;
+      const row = { name: l.NAME || '', parent, amount: l.CLOSINGBALANCE || '0' };
+      if (side === 'revenue') revenue.push(row);
+      else expense.push(row);
+    }
+    if (revenue.length === 0 && expense.length === 0 && rows.length > 0) {
+      rows.forEach((l) => {
+        expense.push({
+          name: l.NAME || '',
+          parent: l.PARENT || '',
+          amount: l.CLOSINGBALANCE || '0',
+          _unclassifiedFallback: true,
+        });
+      });
+    }
+    return { revenue, expense, rawCount: rows.length };
   }
 
   mergeLedgerRowsFromResponses(responses) {
@@ -1280,11 +1446,17 @@ class TallyService {
     return [...map.values()];
   }
 
-  parseEnhancedProfitLossResponse(plRes, incomeResponses, expenseResponses) {
+  parseEnhancedProfitLossResponse(
+    plRes,
+    incomeResponses,
+    expenseResponses,
+    recursiveCandidates = [],
+    allLedgersRes = null
+  ) {
     try {
       const plData = this.extractReportDataNode(plRes);
 
-      const revenueLedgers = this.mergeLedgerRowsFromResponses(
+      let revenueLedgers = this.mergeLedgerRowsFromResponses(
         Array.isArray(incomeResponses) ? incomeResponses : []
       );
 
@@ -1295,9 +1467,7 @@ class TallyService {
         professionalFees: 0,
       };
 
-      const expenseLedgers = this.mergeLedgerRowsFromResponses(
-        Array.isArray(expenseResponses) ? expenseResponses : []
-      ).map((l) => {
+      const applyMajorExpense = (l) => {
         const name = (l.name || '').toLowerCase();
         const amount = parseFloat(l.amount) || 0;
         if (name.includes('salary') || name.includes('staff') || name.includes('wage') || name.includes('payroll')) {
@@ -1310,7 +1480,67 @@ class TallyService {
           majorExpenseHeads.professionalFees += amount;
         }
         return l;
-      });
+      };
+
+      let expenseLedgers = this.mergeLedgerRowsFromResponses(
+        Array.isArray(expenseResponses) ? expenseResponses : []
+      ).map(applyMajorExpense);
+
+      const fillFromRecursive = () => {
+        let usedRecursive = false;
+        let maxRaw = 0;
+        for (const fb of recursiveCandidates) {
+          if (!fb) continue;
+          const split = this.splitRecursivePLResponseIntoRevenueExpense(fb);
+          maxRaw = Math.max(maxRaw, split.rawCount || 0);
+          if (revenueLedgers.length === 0 && split.revenue.length) {
+            revenueLedgers = split.revenue;
+            usedRecursive = true;
+          }
+          if (expenseLedgers.length === 0 && split.expense.length) {
+            expenseLedgers = split.expense.map(applyMajorExpense);
+            usedRecursive = true;
+          }
+          if (revenueLedgers.length && expenseLedgers.length) {
+            return { usedRecursive, rawCount: maxRaw };
+          }
+        }
+        if (revenueLedgers.length === 0 && expenseLedgers.length === 0) {
+          for (const fb of recursiveCandidates) {
+            if (!fb) continue;
+            const { revenue: r2, expense: e2, rawCount } = this.splitRecursivePLResponseIntoRevenueExpense(fb);
+            if (r2.length || e2.length) {
+              revenueLedgers = r2;
+              expenseLedgers = e2.map(applyMajorExpense);
+              return { usedRecursive: true, rawCount: rawCount || r2.length + e2.length };
+            }
+          }
+        }
+        return { usedRecursive, rawCount: maxRaw };
+      };
+
+      const meta = fillFromRecursive();
+
+      let plLedgerFill = meta.usedRecursive ? 'recursive-under-pl-root' : 'named-pl-groups';
+      if (revenueLedgers.length === 0 && expenseLedgers.length === 0 && allLedgersRes) {
+        const rows = this.extractLedgerListFromCollectionResponse(allLedgersRes);
+        const revenue = [];
+        const expense = [];
+        for (const l of rows) {
+          const parent = l.PARENT || '';
+          if (this.isLikelyBalanceSheetLedgerParent(parent)) continue;
+          const side = this.classifyPLLedgerByParent(parent);
+          if (side === 'skip') continue;
+          const row = { name: l.NAME || '', parent, amount: l.CLOSINGBALANCE || '0' };
+          if (side === 'revenue') revenue.push(row);
+          else expense.push(row);
+        }
+        if (revenue.length || expense.length) {
+          revenueLedgers = revenue;
+          expenseLedgers = expense.map(applyMajorExpense);
+          plLedgerFill = 'all-ledgers-excluding-bs-parents';
+        }
+      }
 
       return {
         success: true,
@@ -1318,6 +1548,11 @@ class TallyService {
         revenueLedgers,
         expenseLedgers,
         majorExpenseHeads,
+        meta: {
+          plLedgerFill,
+          usedRecursivePl: meta.usedRecursive,
+          recursiveRawLedgerCount: meta.rawCount || 0,
+        },
         message: 'Enhanced Profit & Loss fetched successfully',
       };
     } catch (error) {
