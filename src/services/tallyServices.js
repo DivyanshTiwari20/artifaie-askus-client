@@ -1654,6 +1654,41 @@ class TallyService {
     return [...map.values()];
   }
 
+  /**
+   * Parse the P&L Data response (TYPE=Data, ID="Profit and Loss") to extract
+   * a name→amount map. The Tally report format uses parallel arrays:
+   * DSPACCNAME/PLAMT for group headers, BSNAME/BSAMT for sub-items.
+   */
+  parsePLDataAmounts(plRes) {
+    const amounts = new Map(); // ledger name → amount string
+    const groupTotals = new Map(); // group name → total amount
+    const env = plRes?.ENVELOPE;
+    if (!env) return { amounts, groupTotals };
+
+    // Convert to arrays (xml2js may return single objects or arrays)
+    const toArr = (v) => (!v ? [] : Array.isArray(v) ? v : [v]);
+
+    // Group-level: DSPACCNAME[i] + PLAMT[i]
+    const groupNames = toArr(env.DSPACCNAME);
+    const groupAmts = toArr(env.PLAMT);
+    for (let i = 0; i < groupNames.length; i++) {
+      const name = groupNames[i]?.DSPDISPNAME || '';
+      const amt = groupAmts[i]?.BSMAINAMT || groupAmts[i]?.PLSUBAMT || '0';
+      if (name && amt) groupTotals.set(name, amt);
+    }
+
+    // Sub-item level: BSNAME[i] + BSAMT[i]
+    const subNames = toArr(env.BSNAME);
+    const subAmts = toArr(env.BSAMT);
+    for (let i = 0; i < subNames.length; i++) {
+      const name = subNames[i]?.DSPACCNAME?.DSPDISPNAME || '';
+      const amt = subAmts[i]?.BSSUBAMT || subAmts[i]?.BSMAINAMT || '0';
+      if (name) amounts.set(name, amt);
+    }
+
+    return { amounts, groupTotals };
+  }
+
   parseEnhancedProfitLossResponse(
     plRes,
     incomeResponses,
@@ -1664,9 +1699,20 @@ class TallyService {
     try {
       const plData = this.extractReportDataNode(plRes);
 
+      // ── Extract ACTUAL amounts from the P&L Data response ──
+      const { amounts: plAmounts, groupTotals } = this.parsePLDataAmounts(plRes);
+
+      // Helper: apply P&L Data amount to a ledger row
+      const applyPLAmount = (row) => {
+        if (plAmounts.has(row.name)) {
+          row.amount = plAmounts.get(row.name);
+        }
+        return row;
+      };
+
       let revenueLedgers = this.mergeLedgerRowsFromResponses(
         Array.isArray(incomeResponses) ? incomeResponses : []
-      );
+      ).map(applyPLAmount);
 
       const majorExpenseHeads = {
         staffCost: 0,
@@ -1692,7 +1738,7 @@ class TallyService {
 
       let expenseLedgers = this.mergeLedgerRowsFromResponses(
         Array.isArray(expenseResponses) ? expenseResponses : []
-      ).map(applyMajorExpense);
+      ).map(applyPLAmount).map(applyMajorExpense);
 
       const fillFromRecursive = () => {
         let usedRecursive = false;
@@ -1702,11 +1748,11 @@ class TallyService {
           const split = this.splitRecursivePLResponseIntoRevenueExpense(fb);
           maxRaw = Math.max(maxRaw, split.rawCount || 0);
           if (revenueLedgers.length === 0 && split.revenue.length) {
-            revenueLedgers = split.revenue;
+            revenueLedgers = split.revenue.map(applyPLAmount);
             usedRecursive = true;
           }
           if (expenseLedgers.length === 0 && split.expense.length) {
-            expenseLedgers = split.expense.map(applyMajorExpense);
+            expenseLedgers = split.expense.map(applyPLAmount).map(applyMajorExpense);
             usedRecursive = true;
           }
           if (revenueLedgers.length && expenseLedgers.length) {
@@ -1718,8 +1764,8 @@ class TallyService {
             if (!fb) continue;
             const { revenue: r2, expense: e2, rawCount } = this.splitRecursivePLResponseIntoRevenueExpense(fb);
             if (r2.length || e2.length) {
-              revenueLedgers = r2;
-              expenseLedgers = e2.map(applyMajorExpense);
+              revenueLedgers = r2.map(applyPLAmount);
+              expenseLedgers = e2.map(applyPLAmount).map(applyMajorExpense);
               return { usedRecursive: true, rawCount: rawCount || r2.length + e2.length };
             }
           }
@@ -1740,6 +1786,7 @@ class TallyService {
           const side = this.classifyPLLedgerByParent(parent);
           if (side === 'skip') continue;
           const row = { name: l.NAME || '', parent, amount: l.CLOSINGBALANCE || '0' };
+          if (plAmounts.has(row.name)) row.amount = plAmounts.get(row.name);
           if (side === 'revenue') revenue.push(row);
           else expense.push(row);
         }
@@ -1760,6 +1807,8 @@ class TallyService {
           plLedgerFill,
           usedRecursivePl: meta.usedRecursive,
           recursiveRawLedgerCount: meta.rawCount || 0,
+          plDataGroupTotals: Object.fromEntries(groupTotals),
+          plDataLedgerAmountsCount: plAmounts.size,
         },
         message: 'Enhanced Profit & Loss fetched successfully',
       };
