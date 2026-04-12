@@ -87,6 +87,49 @@ class TallyService {
     }
   }
 
+  /** Tally / xml2js sometimes returns a single object or [obj]. */
+  unwrapFirst(node) {
+    if (node == null) return null;
+    return Array.isArray(node) ? node[0] : node;
+  }
+
+  /**
+   * Report exports (TYPE Data) may use DATA, TALLYMESSAGE, or flat BODY — normalize to one object.
+   */
+  extractReportDataNode(parsed) {
+    const body = this.unwrapFirst(parsed?.ENVELOPE?.BODY);
+    if (!body || typeof body !== 'object') return {};
+    const data = this.unwrapFirst(body.DATA);
+    if (data && typeof data === 'object' && Object.keys(data).length > 0) return data;
+    const tm = this.unwrapFirst(body.TALLYMESSAGE);
+    if (tm && typeof tm === 'object' && Object.keys(tm).length > 0) return tm;
+    return body;
+  }
+
+  /**
+   * Ledgers from a Collection export: ENVELOPE.BODY.DATA.COLLECTION.LEDGER
+   */
+  extractLedgerListFromCollectionResponse(parsed) {
+    const body = this.unwrapFirst(parsed?.ENVELOPE?.BODY);
+    if (!body || typeof body !== 'object') return [];
+    const data = this.unwrapFirst(body.DATA) || body;
+    const col = data.COLLECTION || data.collection;
+    if (!col) return [];
+    const c = this.unwrapFirst(col) || col;
+    const L = c.LEDGER;
+    if (!L) return [];
+    return Array.isArray(L) ? L : [L];
+  }
+
+  escapeXml(str) {
+    if (str == null || str === '') return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
   /**
    * Build simple XML request for Tally
    * @param {string} reportType - Type of report/collection
@@ -120,9 +163,11 @@ class TallyService {
 
   /**
    * Build XML request for ledgers
+   * @param {string} [fromDate] - YYYYMMDD (optional, period balances)
+   * @param {string} [toDate] - YYYYMMDD (optional)
    * @returns {string} - XML request string
    */
-  buildLedgersXMLRequest() {
+  buildLedgersXMLRequest(fromDate, toDate) {
     return `<ENVELOPE>
   <HEADER>
     <VERSION>1</VERSION>
@@ -136,6 +181,10 @@ class TallyService {
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
         ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
+        \
+        ${fromDate ? `<SVFROMDATE>${fromDate}</SVFROMDATE>` : ''}
+        \
+        ${toDate ? `<SVTODATE>${toDate}</SVTODATE>` : ''}
       </STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
@@ -663,7 +712,7 @@ class TallyService {
    */
   parseBalanceSheetResponse(response) {
     try {
-      const data = response?.ENVELOPE?.BODY?.DATA;
+      const data = this.extractReportDataNode(response);
       return {
         success: true,
         data: data || {},
@@ -680,7 +729,7 @@ class TallyService {
    */
   parseProfitLossResponse(response) {
     try {
-      const data = response?.ENVELOPE?.BODY?.DATA;
+      const data = this.extractReportDataNode(response);
       return {
         success: true,
         data: data || {},
@@ -758,7 +807,7 @@ class TallyService {
    */
   parseTrialBalanceResponse(response) {
     try {
-      const data = response?.ENVELOPE?.BODY?.DATA;
+      const data = this.extractReportDataNode(response);
 
       return {
         success: true,
@@ -782,26 +831,13 @@ class TallyService {
    */
   parseLedgersResponse(response) {
     try {
-      const ledgers = [];
-      const ledgerList = response?.ENVELOPE?.BODY?.DATA?.COLLECTION?.LEDGER;
-
-      if (!ledgerList) {
-        return ledgers;
-      }
-
-      // Handle single ledger vs multiple ledgers
-      const ledgerArray = Array.isArray(ledgerList) ? ledgerList : [ledgerList];
-
-      ledgerArray.forEach((ledger) => {
-        ledgers.push({
-          name: ledger.NAME || 'Unknown',
-          parent: ledger.PARENT || '',
-          openingBalance: ledger.OPENINGBALANCE || '0',
-          closingBalance: ledger.CLOSINGBALANCE || '0',
-        });
-      });
-
-      return ledgers;
+      const ledgerArray = this.extractLedgerListFromCollectionResponse(response);
+      return ledgerArray.map((ledger) => ({
+        name: ledger.NAME || 'Unknown',
+        parent: ledger.PARENT || '',
+        openingBalance: ledger.OPENINGBALANCE || '0',
+        closingBalance: ledger.CLOSINGBALANCE || '0',
+      }));
     } catch (error) {
       console.error('Error parsing ledgers response:', error);
       return [];
@@ -815,7 +851,7 @@ class TallyService {
    */
   parseDayBookResponse(response) {
     try {
-      const data = response?.ENVELOPE?.BODY?.DATA;
+      const data = this.extractReportDataNode(response);
 
       return {
         success: true,
@@ -1167,13 +1203,18 @@ class TallyService {
 </ENVELOPE>`;
   }
 
-  buildRevenueLedgersXMLRequest(fromDate, toDate) {
+  /**
+   * Ledgers under a P&L subgroup. TallyPrime (India) uses Direct/Indirect Incomes & Expenses — not "Revenue"/"Expenses".
+   */
+  buildLedgersUnderGroupXMLRequest(groupName, fromDate, toDate) {
+    const g = this.escapeXml(groupName);
+    const safeId = String(groupName).replace(/[^A-Za-z0-9]/g, '_').slice(0, 40) || 'Grp';
     return `<ENVELOPE>
   <HEADER>
     <VERSION>1</VERSION>
     <TALLYREQUEST>Export</TALLYREQUEST>
     <TYPE>Collection</TYPE>
-    <ID>RevenueLedgers</ID>
+    <ID>PLLedgers_${safeId}</ID>
   </HEADER>
   <BODY>
     <DESC>
@@ -1188,42 +1229,9 @@ class TallyService {
       </STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
-          <COLLECTION NAME="RevenueLedgers">
+          <COLLECTION NAME="PLLedgers_${safeId}">
             <TYPE>Ledger</TYPE>
-            <CHILDOF>Revenue</CHILDOF>
-            <FETCH>NAME, PARENT, CLOSINGBALANCE</FETCH>
-          </COLLECTION>
-        </TDLMESSAGE>
-      </TDL>
-    </DESC>
-  </BODY>
-</ENVELOPE>`;
-  }
-
-  buildExpenseLedgersXMLRequest(fromDate, toDate) {
-    return `<ENVELOPE>
-  <HEADER>
-    <VERSION>1</VERSION>
-    <TALLYREQUEST>Export</TALLYREQUEST>
-    <TYPE>Collection</TYPE>
-    <ID>ExpenseLedgers</ID>
-  </HEADER>
-  <BODY>
-    <DESC>
-      <STATICVARIABLES>
-        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
-        \
-        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
-        \
-        ${fromDate ? `<SVFROMDATE>${fromDate}</SVFROMDATE>` : ''}
-        \
-        ${toDate ? `<SVTODATE>${toDate}</SVTODATE>` : ''}
-      </STATICVARIABLES>
-      <TDL>
-        <TDLMESSAGE>
-          <COLLECTION NAME="ExpenseLedgers">
-            <TYPE>Ledger</TYPE>
-            <CHILDOF>Expenses</CHILDOF>
+            <CHILDOF>${g}</CHILDOF>
             <FETCH>NAME, PARENT, CLOSINGBALANCE</FETCH>
           </COLLECTION>
         </TDLMESSAGE>
@@ -1235,38 +1243,51 @@ class TallyService {
 
   async getEnhancedProfitLoss(fromDate, toDate) {
     try {
-      const [plRes, revenueRes, expenseRes] = await Promise.all([
-        this.sendRequest(this.buildEnhancedProfitLossXMLRequest(fromDate, toDate)),
-        this.sendRequest(this.buildRevenueLedgersXMLRequest(fromDate, toDate)).catch(() => null),
-        this.sendRequest(this.buildExpenseLedgersXMLRequest(fromDate, toDate)).catch(() => null),
-      ]);
+      const incomeGroups = ['Direct Incomes', 'Indirect Incomes'];
+      const expenseGroups = ['Direct Expenses', 'Indirect Expenses'];
+      const plReq = this.sendRequest(this.buildEnhancedProfitLossXMLRequest(fromDate, toDate));
+      const incomeReqs = incomeGroups.map((g) =>
+        this.sendRequest(this.buildLedgersUnderGroupXMLRequest(g, fromDate, toDate)).catch(() => null)
+      );
+      const expenseReqs = expenseGroups.map((g) =>
+        this.sendRequest(this.buildLedgersUnderGroupXMLRequest(g, fromDate, toDate)).catch(() => null)
+      );
+      const results = await Promise.all([plReq, ...incomeReqs, ...expenseReqs]);
+      const plRes = results[0];
+      const incomeRes = results.slice(1, 1 + incomeGroups.length);
+      const expenseRes = results.slice(1 + incomeGroups.length);
 
-      return this.parseEnhancedProfitLossResponse(plRes, revenueRes, expenseRes);
+      return this.parseEnhancedProfitLossResponse(plRes, incomeRes, expenseRes);
     } catch (error) {
       throw new Error(`Failed to get enhanced profit & loss: ${error.message}`);
     }
   }
 
-  parseEnhancedProfitLossResponse(plRes, revenueRes, expenseRes) {
-    try {
-      const plData = plRes?.ENVELOPE?.BODY?.DATA || {};
-
-      // Revenue ledgers
-      let revenueLedgers = [];
-      if (revenueRes) {
-        const revList = revenueRes?.ENVELOPE?.BODY?.DATA?.COLLECTION?.LEDGER;
-        if (revList) {
-          const arr = Array.isArray(revList) ? revList : [revList];
-          revenueLedgers = arr.map((l) => ({
-            name: l.NAME || '',
-            parent: l.PARENT || '',
-            amount: l.CLOSINGBALANCE || '0',
-          }));
-        }
+  mergeLedgerRowsFromResponses(responses) {
+    const map = new Map();
+    for (const res of responses) {
+      if (!res) continue;
+      for (const l of this.extractLedgerListFromCollectionResponse(res)) {
+        const name = l.NAME || '';
+        if (!name) continue;
+        map.set(name, {
+          name,
+          parent: l.PARENT || '',
+          amount: l.CLOSINGBALANCE || '0',
+        });
       }
+    }
+    return [...map.values()];
+  }
 
-      // Expense ledgers
-      let expenseLedgers = [];
+  parseEnhancedProfitLossResponse(plRes, incomeResponses, expenseResponses) {
+    try {
+      const plData = this.extractReportDataNode(plRes);
+
+      const revenueLedgers = this.mergeLedgerRowsFromResponses(
+        Array.isArray(incomeResponses) ? incomeResponses : []
+      );
+
       const majorExpenseHeads = {
         staffCost: 0,
         rent: 0,
@@ -1274,33 +1295,22 @@ class TallyService {
         professionalFees: 0,
       };
 
-      if (expenseRes) {
-        const expList = expenseRes?.ENVELOPE?.BODY?.DATA?.COLLECTION?.LEDGER;
-        if (expList) {
-          const arr = Array.isArray(expList) ? expList : [expList];
-          expenseLedgers = arr.map((l) => {
-            const name = (l.NAME || '').toLowerCase();
-            const amount = parseFloat(l.CLOSINGBALANCE) || 0;
-
-            // Categorize major expense heads
-            if (name.includes('salary') || name.includes('staff') || name.includes('wage') || name.includes('payroll')) {
-              majorExpenseHeads.staffCost += amount;
-            } else if (name.includes('rent') || name.includes('lease')) {
-              majorExpenseHeads.rent += amount;
-            } else if (name.includes('travel') || name.includes('conveyance') || name.includes('transport')) {
-              majorExpenseHeads.travel += amount;
-            } else if (name.includes('professional') || name.includes('consultancy') || name.includes('legal')) {
-              majorExpenseHeads.professionalFees += amount;
-            }
-
-            return {
-              name: l.NAME || '',
-              parent: l.PARENT || '',
-              amount: l.CLOSINGBALANCE || '0',
-            };
-          });
+      const expenseLedgers = this.mergeLedgerRowsFromResponses(
+        Array.isArray(expenseResponses) ? expenseResponses : []
+      ).map((l) => {
+        const name = (l.name || '').toLowerCase();
+        const amount = parseFloat(l.amount) || 0;
+        if (name.includes('salary') || name.includes('staff') || name.includes('wage') || name.includes('payroll')) {
+          majorExpenseHeads.staffCost += amount;
+        } else if (name.includes('rent') || name.includes('lease')) {
+          majorExpenseHeads.rent += amount;
+        } else if (name.includes('travel') || name.includes('conveyance') || name.includes('transport')) {
+          majorExpenseHeads.travel += amount;
+        } else if (name.includes('professional') || name.includes('consultancy') || name.includes('legal')) {
+          majorExpenseHeads.professionalFees += amount;
         }
-      }
+        return l;
+      });
 
       return {
         success: true,
@@ -1911,7 +1921,7 @@ class TallyService {
 
   parseEnhancedBalanceSheetResponse(bsRes, groupsRes, compareBsRes) {
     try {
-      const bsData = bsRes?.ENVELOPE?.BODY?.DATA || {};
+      const bsData = this.extractReportDataNode(bsRes);
 
       // Categorize ledgers from groups response
       const categories = {
@@ -1924,9 +1934,8 @@ class TallyService {
       };
 
       if (groupsRes) {
-        const ledgerList = groupsRes?.ENVELOPE?.BODY?.DATA?.COLLECTION?.LEDGER;
-        if (ledgerList) {
-          const arr = Array.isArray(ledgerList) ? ledgerList : [ledgerList];
+        const arr = this.extractLedgerListFromCollectionResponse(groupsRes);
+        if (arr.length) {
           arr.forEach((l) => {
             const parent = (l.PARENT || '').toLowerCase();
             const name = (l.NAME || '').toLowerCase();
@@ -1975,7 +1984,7 @@ class TallyService {
 
       // Comparative balance sheet
       if (compareBsRes) {
-        result.comparativeData = compareBsRes?.ENVELOPE?.BODY?.DATA || {};
+        result.comparativeData = this.extractReportDataNode(compareBsRes);
       }
 
       return result;
@@ -2057,34 +2066,41 @@ class TallyService {
 
   async getEnhancedTrialBalance(fromDate, toDate, ledgerGroup) {
     try {
-      const [tbRes, ledgerRes] = await Promise.all([
+      const [tbRes, ledgerRes, allLedgersRes] = await Promise.all([
         this.sendRequest(this.buildEnhancedTrialBalanceXMLRequest(fromDate, toDate)),
         this.sendRequest(this.buildLedgerWithLastEntryDateXMLRequest(fromDate, toDate, ledgerGroup)).catch(() => null),
+        this.sendRequest(this.buildLedgersXMLRequest(fromDate, toDate)).catch(() => null),
       ]);
 
-      return this.parseEnhancedTrialBalanceResponse(tbRes, ledgerRes);
+      return this.parseEnhancedTrialBalanceResponse(tbRes, ledgerRes, allLedgersRes);
     } catch (error) {
       throw new Error(`Failed to get enhanced trial balance: ${error.message}`);
     }
   }
 
-  parseEnhancedTrialBalanceResponse(tbRes, ledgerRes) {
+  parseEnhancedTrialBalanceResponse(tbRes, ledgerRes, allLedgersRes) {
     try {
-      const tbData = tbRes?.ENVELOPE?.BODY?.DATA || {};
+      const tbData = this.extractReportDataNode(tbRes);
 
       let ledgersWithDates = [];
       if (ledgerRes) {
-        const ledgerList = ledgerRes?.ENVELOPE?.BODY?.DATA?.COLLECTION?.LEDGER;
-        if (ledgerList) {
-          const arr = Array.isArray(ledgerList) ? ledgerList : [ledgerList];
-          ledgersWithDates = arr.map((l) => ({
-            name: l.NAME || '',
-            parent: l.PARENT || '',
-            openingBalance: l.OPENINGBALANCE || '0',
-            closingBalance: l.CLOSINGBALANCE || '0',
-            lastEntryDate: l.LASTENTRYDATE || '',
-          }));
-        }
+        ledgersWithDates = this.extractLedgerListFromCollectionResponse(ledgerRes).map((l) => ({
+          name: l.NAME || '',
+          parent: l.PARENT || '',
+          openingBalance: l.OPENINGBALANCE || '0',
+          closingBalance: l.CLOSINGBALANCE || '0',
+          lastEntryDate: l.LASTENTRYDATE || '',
+        }));
+      }
+
+      if (ledgersWithDates.length === 0 && allLedgersRes) {
+        ledgersWithDates = this.extractLedgerListFromCollectionResponse(allLedgersRes).map((l) => ({
+          name: l.NAME || '',
+          parent: l.PARENT || '',
+          openingBalance: l.OPENINGBALANCE || '0',
+          closingBalance: l.CLOSINGBALANCE || '0',
+          lastEntryDate: l.LASTENTRYDATE || '',
+        }));
       }
 
       return {
