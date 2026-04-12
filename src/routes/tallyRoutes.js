@@ -36,7 +36,7 @@ function resolveReportDates(fromDate, toDate) {
  * Skips /companies, /test*, /diagnostics (they don't need SVCURRENTCOMPANY).
  */
 router.use(async (req, res, next) => {
-  const skip = ['/companies', '/test', '/test-public', '/diagnostics', '/reports/summary'];
+  const skip = ['/companies', '/test', '/test-public', '/diagnostics', '/reports/summary', '/debug-company'];
   if (skip.some(p => req.path === p || req.path.startsWith(p))) {
     return next();
   }
@@ -46,6 +46,47 @@ router.use(async (req, res, next) => {
     console.warn('⚠️ Company auto-detect warning:', err.message);
   }
   next();
+});
+
+/**
+ * @route   GET /api/tally/debug-company
+ * @desc    Debug company name detection — shows env, Tally company list, raw XML, and resolved name
+ * @access  Public (no auth required for debugging)
+ */
+router.get('/debug-company', async (req, res) => {
+  try {
+    const results = {
+      envCompanyName: tallyService.companyName || null,
+      envCompanyNameLength: (tallyService.companyName || '').length,
+      envCompanyNameChars: [...(tallyService.companyName || '')].map(c => ({ char: c, code: c.charCodeAt(0) })).slice(-5),
+      tallyHost: tallyService.tallyHost,
+      resolvedBefore: tallyService._resolvedCompanyName,
+    };
+
+    // Force re-detection
+    tallyService._resolvedCompanyName = null;
+    tallyService.clearTraceBuffer();
+
+    const resolved = await tallyService.autoDetectCompanyName();
+    results.resolvedAfterAutoDetect = resolved;
+    results.resolvedLength = (resolved || '').length;
+
+    // Also show what getCompanies returns
+    try {
+      const companies = await tallyService.getCompanies();
+      results.getCompaniesResult = companies;
+      results.getCompaniesCount = companies.length;
+    } catch (e) {
+      results.getCompaniesError = e.message;
+    }
+
+    // Show trace from auto-detect calls
+    results.autoDetectTrace = tallyService.getTraceBuffer();
+
+    res.status(200).json({ success: true, debug: results });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 /**

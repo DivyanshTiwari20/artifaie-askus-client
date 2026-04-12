@@ -12,7 +12,7 @@ class TallyService {
   constructor() {
     // Get Tally configuration from environment variables
     this.tallyHost = process.env.TALLY_HOST || 'http://localhost:9000';
-    this.companyName = process.env.TALLY_COMPANY_NAME;
+    this.companyName = (process.env.TALLY_COMPANY_NAME || '').trim().replace(/[\r\n\t]/g, '') || undefined;
 
     /**
      * The actual company name resolved from Tally.
@@ -188,60 +188,124 @@ class TallyService {
 
   /**
    * Auto-detect the correct company name from Tally.
-   * Queries the company list (which doesn't need SVCURRENTCOMPANY),
-   * then picks the best match against the env var, or the first/only company.
+   * Tries multiple XML request strategies since Tally versions differ.
+   * NEVER returns empty string if env var is set — wrong name is better than no name
+   * (Tally gives a clear LINEERROR with wrong name, vs silently empty data with none).
    */
   async autoDetectCompanyName() {
     try {
       console.log('🔍 Auto-detecting company name from Tally...');
       console.log(`   ENV TALLY_COMPANY_NAME = "${this.companyName || '(not set)'}"`);
 
-      const companies = await this.getCompanies();
-      const names = companies.map(c => c.name).filter(Boolean);
+      let names = [];
 
-      console.log(`   Tally returned ${names.length} company(ies): ${JSON.stringify(names)}`);
-
-      if (names.length === 0) {
-        console.warn('⚠️  Tally returned 0 companies. SVCURRENTCOMPANY will be omitted.');
-        this._resolvedCompanyName = '';
-        return '';
+      // ── Method 1: Built-in "List of Companies" (no TDL override) ──
+      // This is a reserved Tally collection that works without any active company.
+      // The TDL-based version in getCompanies() may fail if no company is loaded.
+      try {
+        const builtInXml = `<ENVELOPE>
+  <HEADER>
+    <VERSION>1</VERSION>
+    <TALLYREQUEST>Export</TALLYREQUEST>
+    <TYPE>Collection</TYPE>
+    <ID>List of Companies</ID>
+  </HEADER>
+  <BODY>
+    <DESC>
+      <STATICVARIABLES>
+        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+      </STATICVARIABLES>
+    </DESC>
+  </BODY>
+</ENVELOPE>`;
+        const builtInRes = await this.sendRequest(builtInXml);
+        const collection = builtInRes?.ENVELOPE?.BODY?.DATA?.COLLECTION;
+        if (collection) {
+          let companyEntries = collection.COMPANY;
+          if (companyEntries) {
+            if (!Array.isArray(companyEntries)) companyEntries = [companyEntries];
+            for (const c of companyEntries) {
+              // Built-in returns plain strings: <COMPANY>Name</COMPANY>
+              // TDL-based returns objects: <COMPANY><NAME>Name</NAME></COMPANY>
+              const name = typeof c === 'string' ? c.trim()
+                : (c?.NAME || c?._ || (typeof c === 'object' ? JSON.stringify(c) : String(c))).trim();
+              if (name && name !== 'Unknown' && !name.startsWith('{')) {
+                names.push(name);
+              }
+            }
+          }
+        }
+        console.log(`   Method 1 (built-in collection): ${names.length} company(ies) → ${JSON.stringify(names)}`);
+      } catch (e) {
+        console.log(`   Method 1 failed: ${e.message}`);
       }
 
-      // If env var matches exactly, use it
-      if (this.companyName && names.includes(this.companyName)) {
-        console.log(`✅ Env company name matches Tally exactly: "${this.companyName}"`);
-        this._resolvedCompanyName = this.companyName;
+      // ── Method 2: TDL-based Company fetch (original getCompanies) ──
+      if (names.length === 0) {
+        try {
+          const companies = await this.getCompanies();
+          names = companies.map(c => c.name).filter(n => n && n !== 'Unknown');
+          console.log(`   Method 2 (TDL collection): ${names.length} company(ies) → ${JSON.stringify(names)}`);
+        } catch (e) {
+          console.log(`   Method 2 failed: ${e.message}`);
+        }
+      }
+
+      console.log(`   Final: Tally returned ${names.length} company(ies): ${JSON.stringify(names)}`);
+
+      // ── If we got company names, pick the best match ──
+      if (names.length > 0) {
+        // Exact match with env var
+        if (this.companyName && names.includes(this.companyName)) {
+          console.log(`✅ Env company name matches Tally exactly: "${this.companyName}"`);
+          this._resolvedCompanyName = this.companyName;
+          return this._resolvedCompanyName;
+        }
+
+        // Case-insensitive match
+        if (this.companyName) {
+          const envLower = this.companyName.toLowerCase();
+          const ciMatch = names.find(n => n.toLowerCase() === envLower);
+          if (ciMatch) {
+            console.log(`✅ Case-insensitive match: "${ciMatch}"`);
+            this._resolvedCompanyName = ciMatch;
+            return this._resolvedCompanyName;
+          }
+
+          // Partial match
+          const partialMatch = names.find(n =>
+            n.toLowerCase().includes(envLower) || envLower.includes(n.toLowerCase())
+          );
+          if (partialMatch) {
+            console.log(`✅ Partial match: "${partialMatch}" (env was "${this.companyName}")`);
+            this._resolvedCompanyName = partialMatch;
+            return this._resolvedCompanyName;
+          }
+        }
+
+        // No match — use first company from Tally
+        console.log(`⚠️  Env "${this.companyName}" not found. Using first: "${names[0]}"`);
+        this._resolvedCompanyName = names[0];
         return this._resolvedCompanyName;
       }
 
-      // Case-insensitive match
+      // ── Could not list companies → fall back to env var (NEVER use empty) ──
       if (this.companyName) {
-        const envLower = this.companyName.toLowerCase();
-        const ciMatch = names.find(n => n.toLowerCase() === envLower);
-        if (ciMatch) {
-          console.log(`✅ Env company name matches Tally (case-insensitive): "${ciMatch}"`);
-          this._resolvedCompanyName = ciMatch;
-          return this._resolvedCompanyName;
-        }
-
-        // Partial / fuzzy match (env name is a substring or vice versa)
-        const partialMatch = names.find(n =>
-          n.toLowerCase().includes(envLower) || envLower.includes(n.toLowerCase())
-        );
-        if (partialMatch) {
-          console.log(`✅ Env company name partially matches Tally: "${partialMatch}" (env was "${this.companyName}")`);
-          this._resolvedCompanyName = partialMatch;
-          return this._resolvedCompanyName;
-        }
+        console.warn(`⚠️  Could not list companies from Tally. Falling back to env var: "${this.companyName}"`);
+        this._resolvedCompanyName = this.companyName;
+        return this.companyName;
       }
 
-      // No match at all — use first available company
-      console.log(`⚠️  Env company "${this.companyName}" not found in Tally. Using first company: "${names[0]}"`);
-      this._resolvedCompanyName = names[0];
-      return this._resolvedCompanyName;
+      console.warn('⚠️  No companies found and no env var set.');
+      this._resolvedCompanyName = '';
+      return '';
     } catch (error) {
       console.error('❌ Auto-detect company failed:', error.message);
-      // If auto-detect fails, try without company name
+      // Fall back to env var, NEVER empty
+      if (this.companyName) {
+        this._resolvedCompanyName = this.companyName;
+        return this.companyName;
+      }
       this._resolvedCompanyName = '';
       return '';
     }
