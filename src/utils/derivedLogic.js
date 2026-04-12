@@ -618,6 +618,19 @@ function getCurrentMonthRange() {
     };
 }
 
+/**
+ * Calendar year to date: 1 Jan (current year) through today (server local date).
+ * Use when the API omits fromDate/toDate so Tally gets an explicit period (e.g. P&L / Trial Balance).
+ */
+function getCalendarYearToDateRange() {
+    const today = getToday();
+    const jan1 = new Date(today.getFullYear(), 0, 1);
+    return {
+        fromDate: formatTallyDate(jan1),
+        toDate: formatTallyDate(today),
+    };
+}
+
 module.exports = {
     deriveReceivables,
     derivePayables,
@@ -631,4 +644,5 @@ module.exports = {
     getPreviousMonthRange,
     getSameMonthLastYearRange,
     getCurrentMonthRange,
+    getCalendarYearToDateRange,
 };

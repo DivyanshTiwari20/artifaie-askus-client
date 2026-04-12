@@ -19,7 +19,17 @@ const {
   getPreviousMonthRange,
   getSameMonthLastYearRange,
   getCurrentMonthRange,
+  getCalendarYearToDateRange,
 } = require('../utils/derivedLogic');
+
+/** If fromDate/toDate are omitted, use 1 Jan → today (YYYYMMDD, server local). */
+function resolveReportDates(fromDate, toDate) {
+  const d = getCalendarYearToDateRange();
+  return {
+    fromDate: fromDate || d.fromDate,
+    toDate: toDate || d.toDate,
+  };
+}
 
 /**
  * @route   GET /api/tally/diagnostics
@@ -144,10 +154,11 @@ router.get('/companies', protect, async (req, res) => {
  */
 router.get('/trial-balance', protect, authorize('admin', 'manager'), async (req, res) => {
   try {
-    const { fromDate, toDate, ledgerGroup, status } = req.query;
+    const { ledgerGroup, status, fromDate: qFrom, toDate: qTo } = req.query;
+    const { fromDate, toDate } = resolveReportDates(qFrom, qTo);
 
     console.log('📊 Fetching Enhanced Trial Balance from Tally...');
-    console.log(`   Period: ${fromDate || 'Default'} to ${toDate || 'Default'}`);
+    console.log(`   Period: ${fromDate} to ${toDate}`);
     if (ledgerGroup) console.log(`   Ledger Group: ${ledgerGroup}`);
     if (status) console.log(`   Status Filter: ${status}`);
 
@@ -158,8 +169,8 @@ router.get('/trial-balance', protect, authorize('admin', 'manager'), async (req,
       success: true,
       data: derived,
       filters: {
-        fromDate: fromDate || 'Default (Apr 1, 2024)',
-        toDate: toDate || 'Default (Mar 31, 2025)',
+        fromDate,
+        toDate,
         ledgerGroup: ledgerGroup || 'All',
         status: status || 'All',
       },
@@ -207,10 +218,10 @@ router.get('/ledgers', protect, authorize('admin', 'manager'), async (req, res) 
  */
 router.get('/day-book', protect, authorize('admin', 'manager'), async (req, res) => {
   try {
-    const { fromDate, toDate } = req.query;
+    const { fromDate, toDate } = resolveReportDates(req.query.fromDate, req.query.toDate);
 
     console.log('📊 Fetching Day Book from Tally...');
-    console.log(`   Period: ${fromDate || 'Default'} to ${toDate || 'Default'}`);
+    console.log(`   Period: ${fromDate} to ${toDate}`);
 
     const dayBook = await tallyService.getDayBook(fromDate, toDate);
 
@@ -218,8 +229,8 @@ router.get('/day-book', protect, authorize('admin', 'manager'), async (req, res)
       success: true,
       data: dayBook,
       filters: {
-        fromDate: fromDate || 'Default (Apr 1, 2024)',
-        toDate: toDate || 'Default (Mar 31, 2025)',
+        fromDate,
+        toDate,
       },
     });
   } catch (error) {
@@ -337,7 +348,7 @@ router.get('/stock-groups', protect, authorize('admin', 'manager'), async (req, 
 router.get('/vouchers/:type', protect, authorize('admin', 'manager'), async (req, res) => {
   try {
     const { type } = req.params;
-    const { fromDate, toDate } = req.query;
+    const { fromDate, toDate } = resolveReportDates(req.query.fromDate, req.query.toDate);
 
     // Validate voucher type
     const validTypes = ['Sales', 'Purchase', 'Receipt', 'Payment', 'Journal', 'Contra', 'Credit Note', 'Debit Note'];
@@ -349,7 +360,7 @@ router.get('/vouchers/:type', protect, authorize('admin', 'manager'), async (req
     }
 
     console.log(`📊 Fetching ${type} Vouchers from Tally...`);
-    console.log(`   Period: ${fromDate || 'Default'} to ${toDate || 'Default'}`);
+    console.log(`   Period: ${fromDate} to ${toDate}`);
 
     const vouchers = await tallyService.getVouchers(type, fromDate, toDate);
 
@@ -359,8 +370,8 @@ router.get('/vouchers/:type', protect, authorize('admin', 'manager'), async (req
       count: vouchers.length,
       data: vouchers,
       filters: {
-        fromDate: fromDate || 'Default (Apr 1, 2024)',
-        toDate: toDate || 'Default (Mar 31, 2025)',
+        fromDate,
+        toDate,
       },
     });
   } catch (error) {
@@ -381,10 +392,10 @@ router.get('/vouchers/:type', protect, authorize('admin', 'manager'), async (req
  */
 router.get('/receivables', protect, authorize('admin', 'manager'), async (req, res) => {
   try {
-    const { fromDate, toDate } = req.query;
+    const { fromDate, toDate } = resolveReportDates(req.query.fromDate, req.query.toDate);
 
     console.log('📊 Fetching Receivables from Tally...');
-    console.log(`   Period: ${fromDate || 'Default'} to ${toDate || 'Default'}`);
+    console.log(`   Period: ${fromDate} to ${toDate}`);
 
     // Fetch receivables + MTD receipts in parallel
     const mtdRange = getCurrentMonthRange();
@@ -404,8 +415,8 @@ router.get('/receivables', protect, authorize('admin', 'manager'), async (req, r
       count: derived.bills.length,
       data: derived,
       filters: {
-        fromDate: fromDate || 'Default (Apr 1, 2024)',
-        toDate: toDate || 'Default (Mar 31, 2025)',
+        fromDate,
+        toDate,
       },
     });
   } catch (error) {
@@ -426,10 +437,10 @@ router.get('/receivables', protect, authorize('admin', 'manager'), async (req, r
  */
 router.get('/payables', protect, authorize('admin', 'manager'), async (req, res) => {
   try {
-    const { fromDate, toDate } = req.query;
+    const { fromDate, toDate } = resolveReportDates(req.query.fromDate, req.query.toDate);
 
     console.log('📊 Fetching Payables from Tally...');
-    console.log(`   Period: ${fromDate || 'Default'} to ${toDate || 'Default'}`);
+    console.log(`   Period: ${fromDate} to ${toDate}`);
 
     const result = await tallyService.getPayables(fromDate, toDate);
     const derived = derivePayables(result);
@@ -438,8 +449,8 @@ router.get('/payables', protect, authorize('admin', 'manager'), async (req, res)
       success: true,
       data: derived,
       filters: {
-        fromDate: fromDate || 'Default (Apr 1, 2024)',
-        toDate: toDate || 'Default (Mar 31, 2025)',
+        fromDate,
+        toDate,
       },
     });
   } catch (error) {
@@ -460,10 +471,10 @@ router.get('/payables', protect, authorize('admin', 'manager'), async (req, res)
  */
 router.get('/profit-loss', protect, authorize('admin', 'manager'), async (req, res) => {
   try {
-    const { fromDate, toDate } = req.query;
+    const { fromDate, toDate } = resolveReportDates(req.query.fromDate, req.query.toDate);
 
     console.log('📊 Fetching Enhanced Profit & Loss from Tally...');
-    console.log(`   Period: ${fromDate || 'Default'} to ${toDate || 'Default'}`);
+    console.log(`   Period: ${fromDate} to ${toDate}`);
 
     // Fetch current, last month, and same month last year in parallel
     const lastMonthRange = getPreviousMonthRange();
@@ -481,8 +492,8 @@ router.get('/profit-loss', protect, authorize('admin', 'manager'), async (req, r
       success: true,
       data: derived,
       filters: {
-        fromDate: fromDate || 'Default (Apr 1, 2024)',
-        toDate: toDate || 'Default (Mar 31, 2025)',
+        fromDate,
+        toDate,
         comparedWith: {
           lastMonth: `${lastMonthRange.fromDate} - ${lastMonthRange.toDate}`,
           sameMonthLastYear: `${sameMonthLYRange.fromDate} - ${sameMonthLYRange.toDate}`,
@@ -507,10 +518,10 @@ router.get('/profit-loss', protect, authorize('admin', 'manager'), async (req, r
  */
 router.get('/gst-summary', protect, authorize('admin', 'manager'), async (req, res) => {
   try {
-    const { fromDate, toDate } = req.query;
+    const { fromDate, toDate } = resolveReportDates(req.query.fromDate, req.query.toDate);
 
     console.log('📊 Fetching GST Summary from Tally...');
-    console.log(`   Period: ${fromDate || 'Default'} to ${toDate || 'Default'}`);
+    console.log(`   Period: ${fromDate} to ${toDate}`);
 
     const gstSummary = await tallyService.getGSTSummary(fromDate, toDate);
     const derived = deriveGSTSummary(gstSummary);
@@ -519,8 +530,8 @@ router.get('/gst-summary', protect, authorize('admin', 'manager'), async (req, r
       success: true,
       data: derived,
       filters: {
-        fromDate: fromDate || 'Default (Apr 1, 2024)',
-        toDate: toDate || 'Default (Mar 31, 2025)',
+        fromDate,
+        toDate,
       },
     });
   } catch (error) {
@@ -542,11 +553,12 @@ router.get('/gst-summary', protect, authorize('admin', 'manager'), async (req, r
  */
 router.get('/client-billing', protect, authorize('admin', 'manager'), async (req, res) => {
   try {
-    const { clientName, fromDate, toDate } = req.query;
+    const { clientName } = req.query;
+    const { fromDate, toDate } = resolveReportDates(req.query.fromDate, req.query.toDate);
 
     console.log('📊 Fetching Client Billing from Tally...');
     console.log(`   Client: ${clientName || 'All'}`);
-    console.log(`   Period: ${fromDate || 'Default'} to ${toDate || 'Default'}`);
+    console.log(`   Period: ${fromDate} to ${toDate}`);
 
     const billing = await tallyService.getClientBilling(clientName, fromDate, toDate);
     const derived = deriveClientBilling(billing);
@@ -557,8 +569,8 @@ router.get('/client-billing', protect, authorize('admin', 'manager'), async (req
       data: derived,
       filters: {
         clientName: clientName || 'All',
-        fromDate: fromDate || 'Default (Apr 1, 2024)',
-        toDate: toDate || 'Default (Mar 31, 2025)',
+        fromDate,
+        toDate,
       },
     });
   } catch (error) {
