@@ -591,10 +591,10 @@ router.get('/client-billing', protect, authorize('admin', 'manager'), async (req
  */
 router.get('/bank-position', protect, authorize('admin', 'manager'), async (req, res) => {
   try {
-    const { fromDate, toDate } = req.query;
+    const { fromDate, toDate } = resolveReportDates(req.query.fromDate, req.query.toDate);
 
     console.log('📊 Fetching Bank Position from Tally...');
-    console.log(`   Period: ${fromDate || 'Default'} to ${toDate || 'Default'}`);
+    console.log(`   Period: ${fromDate} to ${toDate}`);
 
     const bankPosition = await tallyService.getBankPosition(fromDate, toDate);
     const derived = deriveBankPosition(bankPosition);
@@ -603,8 +603,8 @@ router.get('/bank-position', protect, authorize('admin', 'manager'), async (req,
       success: true,
       data: derived,
       filters: {
-        fromDate: fromDate || 'Default (Apr 1, 2024)',
-        toDate: toDate || 'Default (Mar 31, 2025)',
+        fromDate,
+        toDate,
       },
     });
   } catch (error) {
@@ -626,11 +626,12 @@ router.get('/bank-position', protect, authorize('admin', 'manager'), async (req,
  */
 router.get('/invoice-register', protect, authorize('admin', 'manager'), async (req, res) => {
   try {
-    const { fromDate, toDate, clientName, paymentStatus } = req.query;
+    const { clientName, paymentStatus } = req.query;
+    const { fromDate, toDate } = resolveReportDates(req.query.fromDate, req.query.toDate);
 
     console.log('📊 Fetching Invoice Register from Tally...');
     console.log(`   Client: ${clientName || 'All'}`);
-    console.log(`   Period: ${fromDate || 'Default'} to ${toDate || 'Default'}`);
+    console.log(`   Period: ${fromDate} to ${toDate}`);
     if (paymentStatus) console.log(`   Filter: ${paymentStatus}`);
 
     const invoices = await tallyService.getInvoiceRegister(fromDate, toDate, clientName);
@@ -642,8 +643,8 @@ router.get('/invoice-register', protect, authorize('admin', 'manager'), async (r
       data: derived,
       filters: {
         clientName: clientName || 'All',
-        fromDate: fromDate || 'Default (Apr 1, 2024)',
-        toDate: toDate || 'Default (Mar 31, 2025)',
+        fromDate,
+        toDate,
         paymentStatus: paymentStatus || 'All',
       },
     });
@@ -666,10 +667,11 @@ router.get('/invoice-register', protect, authorize('admin', 'manager'), async (r
  */
 router.get('/balance-sheet', protect, authorize('admin', 'manager'), async (req, res) => {
   try {
-    const { fromDate, toDate, compareDate } = req.query;
+    const { compareDate } = req.query;
+    const { fromDate, toDate } = resolveReportDates(req.query.fromDate, req.query.toDate);
 
     console.log('📊 Fetching Enhanced Balance Sheet from Tally...');
-    console.log(`   Period: ${fromDate || 'Default'} to ${toDate || 'Default'}`);
+    console.log(`   Period: ${fromDate} to ${toDate}`);
     if (compareDate) console.log(`   Compare to: ${compareDate}`);
 
     const balanceSheet = await tallyService.getEnhancedBalanceSheet(fromDate, toDate, compareDate);
@@ -679,8 +681,8 @@ router.get('/balance-sheet', protect, authorize('admin', 'manager'), async (req,
       success: true,
       data: derived,
       filters: {
-        fromDate: fromDate || 'Default (Apr 1, 2024)',
-        toDate: toDate || 'Default (Mar 31, 2025)',
+        fromDate,
+        toDate,
         compareDate: compareDate || 'None',
       },
     });

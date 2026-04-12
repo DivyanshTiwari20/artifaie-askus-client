@@ -169,11 +169,11 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        d:work	ally-backend{this.companyName ? <SVCURRENTCOMPANY>d:work	ally-backend{this.companyName}</SVCURRENTCOMPANY> : <!-- No specific company -->}
+        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
         \
-        d:work	ally-backend{fromDate ? <SVFROMDATE>d:work	ally-backend{fromDate}</SVFROMDATE> : <!-- Default from date -->}
+        ${fromDate ? `<SVFROMDATE>${fromDate}</SVFROMDATE>` : ''}
         \
-        d:work	ally-backend{toDate ? <SVTODATE>d:work	ally-backend{toDate}</SVTODATE> : <!-- Default to date -->}
+        ${toDate ? `<SVTODATE>${toDate}</SVTODATE>` : ''}
         <EXPLODEFLAG>Yes</EXPLODEFLAG>
       </STATICVARIABLES>
     </DESC>
@@ -200,11 +200,11 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        d:work	ally-backend{this.companyName ? <SVCURRENTCOMPANY>d:work	ally-backend{this.companyName}</SVCURRENTCOMPANY> : <!-- No specific company -->}
+        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
         \
-        d:work	ally-backend{fromDate ? <SVFROMDATE>d:work	ally-backend{fromDate}</SVFROMDATE> : <!-- Default from date -->}
+        ${fromDate ? `<SVFROMDATE>${fromDate}</SVFROMDATE>` : ''}
         \
-        d:work	ally-backend{toDate ? <SVTODATE>d:work	ally-backend{toDate}</SVTODATE> : <!-- Default to date -->}
+        ${toDate ? `<SVTODATE>${toDate}</SVTODATE>` : ''}
         <EXPLODEFLAG>Yes</EXPLODEFLAG>
       </STATICVARIABLES>
     </DESC>
@@ -298,7 +298,7 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        d:work	ally-backend{this.companyName ? <SVCURRENTCOMPANY>d:work	ally-backend{this.companyName}</SVCURRENTCOMPANY> : <!-- No specific company -->}
+        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
       </STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
@@ -330,7 +330,7 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        d:work	ally-backend{this.companyName ? <SVCURRENTCOMPANY>d:work	ally-backend{this.companyName}</SVCURRENTCOMPANY> : <!-- No specific company -->}
+        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
       </STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
@@ -365,11 +365,11 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        d:work	ally-backend{this.companyName ? <SVCURRENTCOMPANY>d:work	ally-backend{this.companyName}</SVCURRENTCOMPANY> : <!-- No specific company -->}
+        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
         \
-        d:work	ally-backend{fromDate ? <SVFROMDATE>d:work	ally-backend{fromDate}</SVFROMDATE> : <!-- Default from date -->}
+        ${fromDate ? `<SVFROMDATE>${fromDate}</SVFROMDATE>` : ''}
         \
-        d:work	ally-backend{toDate ? <SVTODATE>d:work	ally-backend{toDate}</SVTODATE> : <!-- Default to date -->}
+        ${toDate ? `<SVTODATE>${toDate}</SVTODATE>` : ''}
       </STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
@@ -405,11 +405,11 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        d:work	ally-backend{this.companyName ? <SVCURRENTCOMPANY>d:work	ally-backend{this.companyName}</SVCURRENTCOMPANY> : <!-- No specific company -->}
+        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
         \
-        d:work	ally-backend{fromDate ? <SVFROMDATE>d:work	ally-backend{fromDate}</SVFROMDATE> : <!-- Default from date -->}
+        ${fromDate ? `<SVFROMDATE>${fromDate}</SVFROMDATE>` : ''}
         \
-        d:work	ally-backend{toDate ? <SVTODATE>d:work	ally-backend{toDate}</SVTODATE> : <!-- Default to date -->}
+        ${toDate ? `<SVTODATE>${toDate}</SVTODATE>` : ''}
       </STATICVARIABLES>
     </DESC>
   </BODY>
@@ -435,11 +435,11 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        d:work	ally-backend{this.companyName ? <SVCURRENTCOMPANY>d:work	ally-backend{this.companyName}</SVCURRENTCOMPANY> : <!-- No specific company -->}
+        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
         \
-        d:work	ally-backend{fromDate ? <SVFROMDATE>d:work	ally-backend{fromDate}</SVFROMDATE> : <!-- Default from date -->}
+        ${fromDate ? `<SVFROMDATE>${fromDate}</SVFROMDATE>` : ''}
         \
-        d:work	ally-backend{toDate ? <SVTODATE>d:work	ally-backend{toDate}</SVTODATE> : <!-- Default to date -->}
+        ${toDate ? `<SVTODATE>${toDate}</SVTODATE>` : ''}
       </STATICVARIABLES>
     </DESC>
   </BODY>
@@ -463,7 +463,7 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        d:work	ally-backend{this.companyName ? <SVCURRENTCOMPANY>d:work	ally-backend{this.companyName}</SVCURRENTCOMPANY> : <!-- No specific company -->}
+        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
       </STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
@@ -849,11 +849,11 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        d:work	ally-backend{this.companyName ? <SVCURRENTCOMPANY>d:work	ally-backend{this.companyName}</SVCURRENTCOMPANY> : <!-- No specific company -->}
+        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
         \
-        d:work	ally-backend{fromDate ? <SVFROMDATE>d:work	ally-backend{fromDate}</SVFROMDATE> : <!-- Default from date -->}
+        ${fromDate ? `<SVFROMDATE>${fromDate}</SVFROMDATE>` : ''}
         \
-        d:work	ally-backend{toDate ? <SVTODATE>d:work	ally-backend{toDate}</SVTODATE> : <!-- Default to date -->}
+        ${toDate ? `<SVTODATE>${toDate}</SVTODATE>` : ''}
       </STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
@@ -883,11 +883,11 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        d:work	ally-backend{this.companyName ? <SVCURRENTCOMPANY>d:work	ally-backend{this.companyName}</SVCURRENTCOMPANY> : <!-- No specific company -->}
+        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
         \
-        d:work	ally-backend{fromDate ? <SVFROMDATE>d:work	ally-backend{fromDate}</SVFROMDATE> : <!-- Default from date -->}
+        ${fromDate ? `<SVFROMDATE>${fromDate}</SVFROMDATE>` : ''}
         \
-        d:work	ally-backend{toDate ? <SVTODATE>d:work	ally-backend{toDate}</SVTODATE> : <!-- Default to date -->}
+        ${toDate ? `<SVTODATE>${toDate}</SVTODATE>` : ''}
       </STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
@@ -972,11 +972,11 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        d:work	ally-backend{this.companyName ? <SVCURRENTCOMPANY>d:work	ally-backend{this.companyName}</SVCURRENTCOMPANY> : <!-- No specific company -->}
+        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
         \
-        d:work	ally-backend{fromDate ? <SVFROMDATE>d:work	ally-backend{fromDate}</SVFROMDATE> : <!-- Default from date -->}
+        ${fromDate ? `<SVFROMDATE>${fromDate}</SVFROMDATE>` : ''}
         \
-        d:work	ally-backend{toDate ? <SVTODATE>d:work	ally-backend{toDate}</SVTODATE> : <!-- Default to date -->}
+        ${toDate ? `<SVTODATE>${toDate}</SVTODATE>` : ''}
       </STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
@@ -1005,7 +1005,7 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        d:work	ally-backend{this.companyName ? <SVCURRENTCOMPANY>d:work	ally-backend{this.companyName}</SVCURRENTCOMPANY> : <!-- No specific company -->}
+        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
       </STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
@@ -1036,7 +1036,7 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        d:work	ally-backend{this.companyName ? <SVCURRENTCOMPANY>d:work	ally-backend{this.companyName}</SVCURRENTCOMPANY> : <!-- No specific company -->}
+        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
       </STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
@@ -1155,11 +1155,11 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        d:work	ally-backend{this.companyName ? <SVCURRENTCOMPANY>d:work	ally-backend{this.companyName}</SVCURRENTCOMPANY> : <!-- No specific company -->}
+        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
         \
-        d:work	ally-backend{fromDate ? <SVFROMDATE>d:work	ally-backend{fromDate}</SVFROMDATE> : <!-- Default from date -->}
+        ${fromDate ? `<SVFROMDATE>${fromDate}</SVFROMDATE>` : ''}
         \
-        d:work	ally-backend{toDate ? <SVTODATE>d:work	ally-backend{toDate}</SVTODATE> : <!-- Default to date -->}
+        ${toDate ? `<SVTODATE>${toDate}</SVTODATE>` : ''}
         <EXPLODEFLAG>Yes</EXPLODEFLAG>
       </STATICVARIABLES>
     </DESC>
@@ -1180,11 +1180,11 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        d:work	ally-backend{this.companyName ? <SVCURRENTCOMPANY>d:work	ally-backend{this.companyName}</SVCURRENTCOMPANY> : <!-- No specific company -->}
+        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
         \
-        d:work	ally-backend{fromDate ? <SVFROMDATE>d:work	ally-backend{fromDate}</SVFROMDATE> : <!-- Default from date -->}
+        ${fromDate ? `<SVFROMDATE>${fromDate}</SVFROMDATE>` : ''}
         \
-        d:work	ally-backend{toDate ? <SVTODATE>d:work	ally-backend{toDate}</SVTODATE> : <!-- Default to date -->}
+        ${toDate ? `<SVTODATE>${toDate}</SVTODATE>` : ''}
       </STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
@@ -1213,11 +1213,11 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        d:work	ally-backend{this.companyName ? <SVCURRENTCOMPANY>d:work	ally-backend{this.companyName}</SVCURRENTCOMPANY> : <!-- No specific company -->}
+        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
         \
-        d:work	ally-backend{fromDate ? <SVFROMDATE>d:work	ally-backend{fromDate}</SVFROMDATE> : <!-- Default from date -->}
+        ${fromDate ? `<SVFROMDATE>${fromDate}</SVFROMDATE>` : ''}
         \
-        d:work	ally-backend{toDate ? <SVTODATE>d:work	ally-backend{toDate}</SVTODATE> : <!-- Default to date -->}
+        ${toDate ? `<SVTODATE>${toDate}</SVTODATE>` : ''}
       </STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
@@ -1333,11 +1333,11 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        d:work	ally-backend{this.companyName ? <SVCURRENTCOMPANY>d:work	ally-backend{this.companyName}</SVCURRENTCOMPANY> : <!-- No specific company -->}
+        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
         \
-        d:work	ally-backend{fromDate ? <SVFROMDATE>d:work	ally-backend{fromDate}</SVFROMDATE> : <!-- Default from date -->}
+        ${fromDate ? `<SVFROMDATE>${fromDate}</SVFROMDATE>` : ''}
         \
-        d:work	ally-backend{toDate ? <SVTODATE>d:work	ally-backend{toDate}</SVTODATE> : <!-- Default to date -->}
+        ${toDate ? `<SVTODATE>${toDate}</SVTODATE>` : ''}
       </STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
@@ -1436,11 +1436,11 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        d:work	ally-backend{this.companyName ? <SVCURRENTCOMPANY>d:work	ally-backend{this.companyName}</SVCURRENTCOMPANY> : <!-- No specific company -->}
+        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
         \
-        d:work	ally-backend{fromDate ? <SVFROMDATE>d:work	ally-backend{fromDate}</SVFROMDATE> : <!-- Default from date -->}
+        ${fromDate ? `<SVFROMDATE>${fromDate}</SVFROMDATE>` : ''}
         \
-        d:work	ally-backend{toDate ? <SVTODATE>d:work	ally-backend{toDate}</SVTODATE> : <!-- Default to date -->}
+        ${toDate ? `<SVTODATE>${toDate}</SVTODATE>` : ''}
       </STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
@@ -1519,11 +1519,11 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        d:work	ally-backend{this.companyName ? <SVCURRENTCOMPANY>d:work	ally-backend{this.companyName}</SVCURRENTCOMPANY> : <!-- No specific company -->}
+        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
         \
-        d:work	ally-backend{fromDate ? <SVFROMDATE>d:work	ally-backend{fromDate}</SVFROMDATE> : <!-- Default from date -->}
+        ${fromDate ? `<SVFROMDATE>${fromDate}</SVFROMDATE>` : ''}
         \
-        d:work	ally-backend{toDate ? <SVTODATE>d:work	ally-backend{toDate}</SVTODATE> : <!-- Default to date -->}
+        ${toDate ? `<SVTODATE>${toDate}</SVTODATE>` : ''}
       </STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
@@ -1552,7 +1552,7 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        d:work	ally-backend{this.companyName ? <SVCURRENTCOMPANY>d:work	ally-backend{this.companyName}</SVCURRENTCOMPANY> : <!-- No specific company -->}
+        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
       </STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
@@ -1581,11 +1581,11 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        d:work	ally-backend{this.companyName ? <SVCURRENTCOMPANY>d:work	ally-backend{this.companyName}</SVCURRENTCOMPANY> : <!-- No specific company -->}
+        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
         \
-        d:work	ally-backend{fromDate ? <SVFROMDATE>d:work	ally-backend{fromDate}</SVFROMDATE> : <!-- Default from date -->}
+        ${fromDate ? `<SVFROMDATE>${fromDate}</SVFROMDATE>` : ''}
         \
-        d:work	ally-backend{toDate ? <SVTODATE>d:work	ally-backend{toDate}</SVTODATE> : <!-- Default to date -->}
+        ${toDate ? `<SVTODATE>${toDate}</SVTODATE>` : ''}
       </STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
@@ -1721,11 +1721,11 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        d:work	ally-backend{this.companyName ? <SVCURRENTCOMPANY>d:work	ally-backend{this.companyName}</SVCURRENTCOMPANY> : <!-- No specific company -->}
+        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
         \
-        d:work	ally-backend{fromDate ? <SVFROMDATE>d:work	ally-backend{fromDate}</SVFROMDATE> : <!-- Default from date -->}
+        ${fromDate ? `<SVFROMDATE>${fromDate}</SVFROMDATE>` : ''}
         \
-        d:work	ally-backend{toDate ? <SVTODATE>d:work	ally-backend{toDate}</SVTODATE> : <!-- Default to date -->}
+        ${toDate ? `<SVTODATE>${toDate}</SVTODATE>` : ''}
       </STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
@@ -2002,11 +2002,11 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        d:work	ally-backend{this.companyName ? <SVCURRENTCOMPANY>d:work	ally-backend{this.companyName}</SVCURRENTCOMPANY> : <!-- No specific company -->}
+        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
         \
-        d:work	ally-backend{fromDate ? <SVFROMDATE>d:work	ally-backend{fromDate}</SVFROMDATE> : <!-- Default from date -->}
+        ${fromDate ? `<SVFROMDATE>${fromDate}</SVFROMDATE>` : ''}
         \
-        d:work	ally-backend{toDate ? <SVTODATE>d:work	ally-backend{toDate}</SVTODATE> : <!-- Default to date -->}
+        ${toDate ? `<SVTODATE>${toDate}</SVTODATE>` : ''}
         <EXPLODEFLAG>Yes</EXPLODEFLAG>
       </STATICVARIABLES>
     </DESC>
@@ -2034,11 +2034,11 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        d:work	ally-backend{this.companyName ? <SVCURRENTCOMPANY>d:work	ally-backend{this.companyName}</SVCURRENTCOMPANY> : <!-- No specific company -->}
+        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
         \
-        d:work	ally-backend{fromDate ? <SVFROMDATE>d:work	ally-backend{fromDate}</SVFROMDATE> : <!-- Default from date -->}
+        ${fromDate ? `<SVFROMDATE>${fromDate}</SVFROMDATE>` : ''}
         \
-        d:work	ally-backend{toDate ? <SVTODATE>d:work	ally-backend{toDate}</SVTODATE> : <!-- Default to date -->}
+        ${toDate ? `<SVTODATE>${toDate}</SVTODATE>` : ''}
       </STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
