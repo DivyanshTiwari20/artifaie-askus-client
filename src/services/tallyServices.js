@@ -20,6 +20,10 @@ class TallyService {
     // Session ID (will be set if using Tally Cloud)
     this.sessionId = '';
 
+    /** Last N Tally round-trips for ?trace=1 debugging (parallel calls may be out of order). */
+    this._traceBuffer = [];
+    this._traceMax = 24;
+
     // XML parser options
     this.xmlParser = new xml2js.Parser({
       explicitArray: false,
@@ -58,12 +62,30 @@ class TallyService {
         throw new Error('Empty response from Tally');
       }
 
+      const rawStr =
+        typeof response.data === 'string'
+          ? response.data
+          : Buffer.isBuffer(response.data)
+            ? response.data.toString('utf8')
+            : String(response.data ?? '');
+
       // Parse XML response to JavaScript object
-      const parsedResponse = await this.xmlParser.parseStringPromise(
-        response.data
-      );
+      const parsedResponse = await this.xmlParser.parseStringPromise(rawStr);
 
       console.log('✅ Response parsed successfully');
+
+      this._pushTrace({
+        httpStatus: response.status,
+        requestHead: xmlRequest.substring(0, 500),
+        responseHead: rawStr.substring(0, 2000),
+        responseLen: rawStr.length,
+        hasLineError: /LINEERROR|LINE_ERROR|FATAL ERROR/i.test(rawStr),
+        envelopeChildKeys: parsedResponse?.ENVELOPE ? Object.keys(parsedResponse.ENVELOPE) : [],
+        bodyChildKeys: (() => {
+          const b = this.unwrapFirst(parsedResponse?.ENVELOPE?.BODY);
+          return b && typeof b === 'object' ? Object.keys(b) : [];
+        })(),
+      });
 
       // Increment token counter for next request
       this.tokenCounter++;
@@ -85,6 +107,23 @@ class TallyService {
         throw new Error(`Tally API Error: ${error.message}`);
       }
     }
+  }
+
+  clearTraceBuffer() {
+    this._traceBuffer = [];
+  }
+
+  getTraceBuffer() {
+    return {
+      tallyHost: this.tallyHost,
+      tallyCompanyEnv: this.companyName || null,
+      exchanges: [...this._traceBuffer],
+    };
+  }
+
+  _pushTrace(entry) {
+    this._traceBuffer.push({ at: new Date().toISOString(), ...entry });
+    while (this._traceBuffer.length > this._traceMax) this._traceBuffer.shift();
   }
 
   /** Tally / xml2js sometimes returns a single object or [obj]. */

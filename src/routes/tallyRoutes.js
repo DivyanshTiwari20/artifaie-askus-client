@@ -191,6 +191,9 @@ router.get('/trial-balance', protect, authorize('admin', 'manager'), async (req,
  */
 router.get('/ledgers', protect, authorize('admin', 'manager'), async (req, res) => {
   try {
+    const wantTrace = req.query.trace === '1' || req.query.trace === 'true';
+    if (wantTrace) tallyService.clearTraceBuffer();
+
     console.log('📊 Fetching Ledgers from Tally...');
 
     const ledgers = await tallyService.getLedgers();
@@ -199,6 +202,7 @@ router.get('/ledgers', protect, authorize('admin', 'manager'), async (req, res) 
       success: true,
       count: ledgers.length,
       data: ledgers,
+      ...(wantTrace ? { tallyTrace: tallyService.getTraceBuffer() } : {}),
     });
   } catch (error) {
     console.error('❌ Get ledgers error:', error);
@@ -471,17 +475,23 @@ router.get('/payables', protect, authorize('admin', 'manager'), async (req, res)
  */
 router.get('/profit-loss', protect, authorize('admin', 'manager'), async (req, res) => {
   try {
-    const { fromDate, toDate } = resolveReportDates(req.query.fromDate, req.query.toDate);
+    const { fromDate, toDate, trace } = req.query;
+    const wantTrace = trace === '1' || trace === 'true';
+
+    const { fromDate: fd, toDate: td } = resolveReportDates(fromDate, toDate);
 
     console.log('📊 Fetching Enhanced Profit & Loss from Tally...');
-    console.log(`   Period: ${fromDate} to ${toDate}`);
+    console.log(`   Period: ${fd} to ${td}`);
 
-    // Fetch current, last month, and same month last year in parallel
     const lastMonthRange = getPreviousMonthRange();
     const sameMonthLYRange = getSameMonthLastYearRange();
 
-    const [profitLoss, lastMonthPL, sameMonthLYPL] = await Promise.all([
-      tallyService.getEnhancedProfitLoss(fromDate, toDate),
+    if (wantTrace) tallyService.clearTraceBuffer();
+
+    const profitLoss = await tallyService.getEnhancedProfitLoss(fd, td);
+    const tallyTrace = wantTrace ? tallyService.getTraceBuffer() : undefined;
+
+    const [lastMonthPL, sameMonthLYPL] = await Promise.all([
       tallyService.getEnhancedProfitLoss(lastMonthRange.fromDate, lastMonthRange.toDate).catch(() => null),
       tallyService.getEnhancedProfitLoss(sameMonthLYRange.fromDate, sameMonthLYRange.toDate).catch(() => null),
     ]);
@@ -492,13 +502,20 @@ router.get('/profit-loss', protect, authorize('admin', 'manager'), async (req, r
       success: true,
       data: derived,
       filters: {
-        fromDate,
-        toDate,
+        fromDate: fd,
+        toDate: td,
         comparedWith: {
           lastMonth: `${lastMonthRange.fromDate} - ${lastMonthRange.toDate}`,
           sameMonthLastYear: `${sameMonthLYRange.fromDate} - ${sameMonthLYRange.toDate}`,
         },
       },
+      ...(wantTrace && tallyTrace
+        ? {
+            tallyTrace,
+            tallyTraceNote:
+              'Shows Tally host, TALLY_COMPANY_ENV, and each XML exchange for the main P&L period only. Look for hasLineError, empty responseLen, or missing LEDGER in responseHead.',
+          }
+        : {}),
     });
   } catch (error) {
     console.error('❌ Get profit & loss error:', error);
