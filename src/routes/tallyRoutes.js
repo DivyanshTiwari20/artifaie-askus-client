@@ -58,7 +58,6 @@ router.get('/debug-company', async (req, res) => {
     const results = {
       envCompanyName: tallyService.companyName || null,
       envCompanyNameLength: (tallyService.companyName || '').length,
-      envCompanyNameChars: [...(tallyService.companyName || '')].map(c => ({ char: c, code: c.charCodeAt(0) })).slice(-5),
       tallyHost: tallyService.tallyHost,
       resolvedBefore: tallyService._resolvedCompanyName,
     };
@@ -69,19 +68,51 @@ router.get('/debug-company', async (req, res) => {
 
     const resolved = await tallyService.autoDetectCompanyName();
     results.resolvedAfterAutoDetect = resolved;
-    results.resolvedLength = (resolved || '').length;
 
-    // Also show what getCompanies returns
+    // Test: try a simple ledger request WITH the resolved company name
     try {
-      const companies = await tallyService.getCompanies();
-      results.getCompaniesResult = companies;
-      results.getCompaniesCount = companies.length;
+      const testXml = `<ENVELOPE>
+  <HEADER>
+    <VERSION>1</VERSION>
+    <TALLYREQUEST>Export</TALLYREQUEST>
+    <TYPE>Collection</TYPE>
+    <ID>TestLedgers</ID>
+  </HEADER>
+  <BODY>
+    <DESC>
+      <STATICVARIABLES>
+        <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
+        ${tallyService.currentCompanyXml()}
+      </STATICVARIABLES>
+      <TDL>
+        <TDLMESSAGE>
+          <COLLECTION NAME="TestLedgers">
+            <TYPE>Ledger</TYPE>
+            <FETCH>NAME, PARENT, CLOSINGBALANCE</FETCH>
+          </COLLECTION>
+        </TDLMESSAGE>
+      </TDL>
+    </DESC>
+  </BODY>
+</ENVELOPE>`;
+      const testRes = await tallyService.sendRequest(testXml);
+      const ledgers = tallyService.extractLedgerListFromCollectionResponse(testRes);
+      results.dataTest = {
+        success: true,
+        ledgerCount: ledgers.length,
+        sampleLedgers: ledgers.slice(0, 5).map(l => ({
+          name: l.NAME || '',
+          parent: l.PARENT || '',
+          closingBalance: l.CLOSINGBALANCE || '0',
+        })),
+        companyNameUsed: resolved,
+      };
     } catch (e) {
-      results.getCompaniesError = e.message;
+      results.dataTest = { success: false, error: e.message };
     }
 
-    // Show trace from auto-detect calls
-    results.autoDetectTrace = tallyService.getTraceBuffer();
+    // Show trace from all calls
+    results.trace = tallyService.getTraceBuffer();
 
     res.status(200).json({ success: true, debug: results });
   } catch (error) {
