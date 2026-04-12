@@ -32,6 +32,23 @@ function resolveReportDates(fromDate, toDate) {
 }
 
 /**
+ * Middleware: auto-detect Tally company name before data requests.
+ * Skips /companies, /test*, /diagnostics (they don't need SVCURRENTCOMPANY).
+ */
+router.use(async (req, res, next) => {
+  const skip = ['/companies', '/test', '/test-public', '/diagnostics', '/reports/summary'];
+  if (skip.some(p => req.path === p || req.path.startsWith(p))) {
+    return next();
+  }
+  try {
+    await tallyService.ensureCompanyResolved();
+  } catch (err) {
+    console.warn('⚠️ Company auto-detect warning:', err.message);
+  }
+  next();
+});
+
+/**
  * @route   GET /api/tally/diagnostics
  * @desc    Run comprehensive diagnostics to troubleshoot Tally connection
  * @access  Public (no auth required for debugging)
@@ -483,6 +500,10 @@ router.get('/profit-loss', protect, authorize('admin', 'manager'), async (req, r
     console.log('📊 Fetching Enhanced Profit & Loss from Tally...');
     console.log(`   Period: ${fd} to ${td}`);
 
+    // Auto-detect the correct company name from Tally before any data requests
+    const resolvedCompany = await tallyService.ensureCompanyResolved();
+    console.log(`   Resolved company: "${resolvedCompany}"`);
+
     const lastMonthRange = getPreviousMonthRange();
     const sameMonthLYRange = getSameMonthLastYearRange();
 
@@ -511,9 +532,13 @@ router.get('/profit-loss', protect, authorize('admin', 'manager'), async (req, r
       },
       ...(wantTrace && tallyTrace
         ? {
-            tallyTrace,
+            tallyTrace: {
+              ...tallyTrace,
+              resolvedCompanyName: resolvedCompany,
+              envCompanyName: tallyService.companyName || null,
+            },
             tallyTraceNote:
-              'Shows Tally host, TALLY_COMPANY_ENV, and each XML exchange for the main P&L period only. Look for hasLineError, empty responseLen, or missing LEDGER in responseHead.',
+              'Shows Tally host, resolved company name, and each XML exchange. Look for hasLineError, empty responseLen, or missing LEDGER in responseHead.',
           }
         : {}),
     });

@@ -14,6 +14,13 @@ class TallyService {
     this.tallyHost = process.env.TALLY_HOST || 'http://localhost:9000';
     this.companyName = process.env.TALLY_COMPANY_NAME;
 
+    /**
+     * The actual company name resolved from Tally.
+     * null = not yet resolved, '' = Tally has no companies, string = resolved name.
+     */
+    this._resolvedCompanyName = null;
+    this._resolvingPromise = null;
+
     // Token counter for Tally requests (increments with each request)
     this.tokenCounter = 1;
 
@@ -172,9 +179,95 @@ class TallyService {
 
   /** Safe SVCURRENTCOMPANY fragment (company names may contain & etc.) */
   currentCompanyXml() {
-    return this.companyName
-      ? `<SVCURRENTCOMPANY>${this.escapeXml(this.companyName)}</SVCURRENTCOMPANY>`
+    // Use the resolved (auto-detected) company name if available, otherwise fall back to env var
+    const name = this._resolvedCompanyName != null ? this._resolvedCompanyName : this.companyName;
+    return name
+      ? `<SVCURRENTCOMPANY>${this.escapeXml(name)}</SVCURRENTCOMPANY>`
       : '';
+  }
+
+  /**
+   * Auto-detect the correct company name from Tally.
+   * Queries the company list (which doesn't need SVCURRENTCOMPANY),
+   * then picks the best match against the env var, or the first/only company.
+   */
+  async autoDetectCompanyName() {
+    try {
+      console.log('🔍 Auto-detecting company name from Tally...');
+      console.log(`   ENV TALLY_COMPANY_NAME = "${this.companyName || '(not set)'}"`);
+
+      const companies = await this.getCompanies();
+      const names = companies.map(c => c.name).filter(Boolean);
+
+      console.log(`   Tally returned ${names.length} company(ies): ${JSON.stringify(names)}`);
+
+      if (names.length === 0) {
+        console.warn('⚠️  Tally returned 0 companies. SVCURRENTCOMPANY will be omitted.');
+        this._resolvedCompanyName = '';
+        return '';
+      }
+
+      // If env var matches exactly, use it
+      if (this.companyName && names.includes(this.companyName)) {
+        console.log(`✅ Env company name matches Tally exactly: "${this.companyName}"`);
+        this._resolvedCompanyName = this.companyName;
+        return this._resolvedCompanyName;
+      }
+
+      // Case-insensitive match
+      if (this.companyName) {
+        const envLower = this.companyName.toLowerCase();
+        const ciMatch = names.find(n => n.toLowerCase() === envLower);
+        if (ciMatch) {
+          console.log(`✅ Env company name matches Tally (case-insensitive): "${ciMatch}"`);
+          this._resolvedCompanyName = ciMatch;
+          return this._resolvedCompanyName;
+        }
+
+        // Partial / fuzzy match (env name is a substring or vice versa)
+        const partialMatch = names.find(n =>
+          n.toLowerCase().includes(envLower) || envLower.includes(n.toLowerCase())
+        );
+        if (partialMatch) {
+          console.log(`✅ Env company name partially matches Tally: "${partialMatch}" (env was "${this.companyName}")`);
+          this._resolvedCompanyName = partialMatch;
+          return this._resolvedCompanyName;
+        }
+      }
+
+      // No match at all — use first available company
+      console.log(`⚠️  Env company "${this.companyName}" not found in Tally. Using first company: "${names[0]}"`);
+      this._resolvedCompanyName = names[0];
+      return this._resolvedCompanyName;
+    } catch (error) {
+      console.error('❌ Auto-detect company failed:', error.message);
+      // If auto-detect fails, try without company name
+      this._resolvedCompanyName = '';
+      return '';
+    }
+  }
+
+  /**
+   * Ensure we have resolved the company name before any data request.
+   * This is idempotent — only runs once.
+   */
+  async ensureCompanyResolved() {
+    if (this._resolvedCompanyName != null) return this._resolvedCompanyName;
+    // Prevent parallel resolutions
+    if (!this._resolvingPromise) {
+      this._resolvingPromise = this.autoDetectCompanyName().finally(() => {
+        this._resolvingPromise = null;
+      });
+    }
+    return this._resolvingPromise;
+  }
+
+  /**
+   * Manually set the company name (e.g. from ?company= query param).
+   */
+  setCompanyName(name) {
+    this._resolvedCompanyName = name || '';
+    console.log(`🏢 Company name manually set to: "${this._resolvedCompanyName}"`);
   }
 
   /** Parent group looks like Balance Sheet (exclude from P&L heuristics on full ledger export). */
@@ -383,7 +476,7 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
+        ${this.currentCompanyXml()}
         \
         ${fromDate ? `<SVFROMDATE>${fromDate}</SVFROMDATE>` : ''}
         \
@@ -414,7 +507,7 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
+        ${this.currentCompanyXml()}
         \
         ${fromDate ? `<SVFROMDATE>${fromDate}</SVFROMDATE>` : ''}
         \
@@ -512,7 +605,7 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
+        ${this.currentCompanyXml()}
       </STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
@@ -544,7 +637,7 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
+        ${this.currentCompanyXml()}
       </STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
@@ -579,7 +672,7 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
+        ${this.currentCompanyXml()}
         \
         ${fromDate ? `<SVFROMDATE>${fromDate}</SVFROMDATE>` : ''}
         \
@@ -619,7 +712,7 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
+        ${this.currentCompanyXml()}
         \
         ${fromDate ? `<SVFROMDATE>${fromDate}</SVFROMDATE>` : ''}
         \
@@ -649,7 +742,7 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
+        ${this.currentCompanyXml()}
         \
         ${fromDate ? `<SVFROMDATE>${fromDate}</SVFROMDATE>` : ''}
         \
@@ -677,7 +770,7 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
+        ${this.currentCompanyXml()}
       </STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
@@ -1050,7 +1143,7 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
+        ${this.currentCompanyXml()}
         \
         ${fromDate ? `<SVFROMDATE>${fromDate}</SVFROMDATE>` : ''}
         \
@@ -1084,7 +1177,7 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
+        ${this.currentCompanyXml()}
         \
         ${fromDate ? `<SVFROMDATE>${fromDate}</SVFROMDATE>` : ''}
         \
@@ -1173,7 +1266,7 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
+        ${this.currentCompanyXml()}
         \
         ${fromDate ? `<SVFROMDATE>${fromDate}</SVFROMDATE>` : ''}
         \
@@ -1206,7 +1299,7 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
+        ${this.currentCompanyXml()}
       </STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
@@ -1237,7 +1330,7 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
+        ${this.currentCompanyXml()}
       </STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
@@ -1617,7 +1710,7 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
+        ${this.currentCompanyXml()}
         \
         ${fromDate ? `<SVFROMDATE>${fromDate}</SVFROMDATE>` : ''}
         \
@@ -1720,7 +1813,7 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
+        ${this.currentCompanyXml()}
         \
         ${fromDate ? `<SVFROMDATE>${fromDate}</SVFROMDATE>` : ''}
         \
@@ -1803,7 +1896,7 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
+        ${this.currentCompanyXml()}
         \
         ${fromDate ? `<SVFROMDATE>${fromDate}</SVFROMDATE>` : ''}
         \
@@ -1836,7 +1929,7 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
+        ${this.currentCompanyXml()}
       </STATICVARIABLES>
       <TDL>
         <TDLMESSAGE>
@@ -1865,7 +1958,7 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
+        ${this.currentCompanyXml()}
         \
         ${fromDate ? `<SVFROMDATE>${fromDate}</SVFROMDATE>` : ''}
         \
@@ -2005,7 +2098,7 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
+        ${this.currentCompanyXml()}
         \
         ${fromDate ? `<SVFROMDATE>${fromDate}</SVFROMDATE>` : ''}
         \
@@ -2135,7 +2228,7 @@ class TallyService {
     <DESC>
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
-        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : '<!-- No specific company -->'}
+        ${this.currentCompanyXml()}
         ${fromDate ? `<SVFROMDATE>${fromDate}</SVFROMDATE>` : '<!-- Default from date -->'}
         ${toDate ? `<SVTODATE>${toDate}</SVTODATE>` : '<!-- Default to date -->'}
       </STATICVARIABLES>
@@ -2156,7 +2249,7 @@ class TallyService {
     <DESC>
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
-        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : '<!-- No specific company -->'}
+        ${this.currentCompanyXml()}
         ${fromDate ? `<SVFROMDATE>${fromDate}</SVFROMDATE>` : '<!-- Default from date -->'}
         ${toDate ? `<SVTODATE>${toDate}</SVTODATE>` : '<!-- Default to date -->'}
       </STATICVARIABLES>
@@ -2285,7 +2378,7 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
+        ${this.currentCompanyXml()}
         \
         ${fromDate ? `<SVFROMDATE>${fromDate}</SVFROMDATE>` : ''}
         \
@@ -2317,7 +2410,7 @@ class TallyService {
       <STATICVARIABLES>
         <SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT>
         \
-        ${this.companyName ? `<SVCURRENTCOMPANY>${this.companyName}</SVCURRENTCOMPANY>` : ''}
+        ${this.currentCompanyXml()}
         \
         ${fromDate ? `<SVFROMDATE>${fromDate}</SVFROMDATE>` : ''}
         \
