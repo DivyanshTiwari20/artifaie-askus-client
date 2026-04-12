@@ -165,7 +165,19 @@ class TallyService {
     let L = c?.LEDGER;
     if (!L && data.LEDGER) L = data.LEDGER;
     if (!L) return [];
-    return Array.isArray(L) ? L : [L];
+    const arr = Array.isArray(L) ? L : [L];
+
+    // xml2js ignoreAttrs:true drops the NAME attribute from <LEDGER NAME="...">.
+    // Recover name from the nested child element LANGUAGENAME.LIST > NAME.LIST > NAME.
+    for (const l of arr) {
+      if (!l.NAME && l['LANGUAGENAME.LIST']) {
+        const nameList = l['LANGUAGENAME.LIST']?.['NAME.LIST'];
+        if (nameList) {
+          l.NAME = Array.isArray(nameList) ? nameList[0]?.NAME : nameList?.NAME;
+        }
+      }
+    }
+    return arr;
   }
 
   escapeXml(str) {
