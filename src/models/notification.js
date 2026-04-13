@@ -23,7 +23,7 @@ const Notification = {
       const userRes = await pool.query('SELECT expo_push_token FROM users WHERE id = $1', [userId]);
       const pushToken = userRes.rows[0]?.expo_push_token;
       
-      if (pushToken && pushToken.startsWith('ExponentPushToken')) {
+      if (pushToken && (pushToken.startsWith('ExponentPushToken') || pushToken.startsWith('ExpoPushToken'))) {
         axios.post('https://exp.host/--/api/v2/push/send', {
           to: pushToken,
           title: title,
