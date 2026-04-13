@@ -305,12 +305,29 @@ router.post('/:id/updates', protect, async (req, res) => {
     // Also update the task's actual status
     task = await Task.updateStatus(req.params.id, status);
 
-    // Notify assigner if employee changes status
-    if (req.user.role === 'employee' && previousStatus !== status && task.assignedBy) {
+    // Notify the assigner (admin/manager) about this update — skip if updater IS the assigner
+    if (task.assignedBy && task.assignedBy !== req.user.id) {
+      const statusInfo = previousStatus !== status
+        ? ` (status: ${previousStatus} → ${status})`
+        : '';
       await Notification.create({
         userId: task.assignedBy,
-        title: `Task Status Updated`,
-        message: `${req.user.name} updated task "${task.title}" from ${previousStatus} to ${status}${title ? ` — ${title}` : ''}`,
+        title: 'Task Update',
+        message: `${req.user.name} posted an update on "${task.title}"${statusInfo}${title ? `: ${title}` : ''}`,
+        type: 'alert',
+        relatedTaskId: task.id,
+      });
+    }
+
+    // Notify the assigned employee about this update — skip if updater IS the assignee
+    if (task.assignedTo && task.assignedTo !== req.user.id) {
+      const statusInfo = previousStatus !== status
+        ? ` (status: ${previousStatus} → ${status})`
+        : '';
+      await Notification.create({
+        userId: task.assignedTo,
+        title: 'Task Update',
+        message: `${req.user.name} posted an update on "${task.title}"${statusInfo}${title ? `: ${title}` : ''}`,
         type: 'alert',
         relatedTaskId: task.id,
       });
@@ -380,12 +397,25 @@ router.put('/:id/status', protect, async (req, res) => {
       });
     }
 
-    // If an employee completes/cancels a task, notify the assigner
-    if (req.user.role === 'employee' && prevStatus !== status && ['completed', 'cancelled'].includes(status) && task.assignedBy) {
+    // Notify the assigner about status change — skip if the updater IS the assigner
+    if (prevStatus !== status && task.assignedBy && task.assignedBy !== req.user.id) {
+      const statusLabel = status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ');
       await Notification.create({
         userId: task.assignedBy,
-        title: `Task ${status.charAt(0).toUpperCase() + status.slice(1)}`,
-        message: `${req.user.name} has marked the task "${task.title}" as ${status}.`,
+        title: `Task ${statusLabel}`,
+        message: `${req.user.name} changed "${task.title}" from ${prevStatus.replace('_', ' ')} to ${status.replace('_', ' ')}.`,
+        type: 'alert',
+        relatedTaskId: task.id,
+      });
+    }
+
+    // Notify the assigned employee about status change — skip if the updater IS the assignee
+    if (prevStatus !== status && task.assignedTo && task.assignedTo !== req.user.id) {
+      const statusLabel = status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ');
+      await Notification.create({
+        userId: task.assignedTo,
+        title: `Task ${statusLabel}`,
+        message: `${req.user.name} changed "${task.title}" from ${prevStatus.replace('_', ' ')} to ${status.replace('_', ' ')}.`,
         type: 'alert',
         relatedTaskId: task.id,
       });
