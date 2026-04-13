@@ -147,10 +147,10 @@ const Task = {
   },
 
   /**
-   * Get task counts for a user
+   * Get task counts for a user (or globally if admin)
    */
-  async getCountsForUser(userId) {
-    const query = `
+  async getCountsForUser(userId, role) {
+    let query = `
       SELECT
         COUNT(*) FILTER (WHERE status = 'pending') as pending,
         COUNT(*) FILTER (WHERE status = 'in_progress') as in_progress,
@@ -158,9 +158,13 @@ const Task = {
         COUNT(*) FILTER (WHERE status = 'cancelled') as cancelled,
         COUNT(*) as total
       FROM tasks
-      WHERE assigned_to = $1
     `;
-    const result = await pool.query(query, [userId]);
+    let values = [];
+    if (role === 'employee' || role === 'manager') {
+      query += ` WHERE assigned_to = $1`;
+      values.push(userId);
+    }
+    const result = await pool.query(query, values);
     return result.rows[0];
   },
 

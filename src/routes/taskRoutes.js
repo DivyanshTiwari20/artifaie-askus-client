@@ -152,7 +152,7 @@ router.get('/', protect, async (req, res) => {
  */
 router.get('/user/counts', protect, async (req, res) => {
   try {
-    const counts = await Task.getCountsForUser(req.user.id);
+    const counts = await Task.getCountsForUser(req.user.id, req.user.role);
     res.status(200).json({
       success: true,
       data: counts,
