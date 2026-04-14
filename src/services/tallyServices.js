@@ -1581,19 +1581,18 @@ class TallyService {
       const expenseGroups = ['Direct Expenses', 'Indirect Expenses', 'Purchase Accounts'];
       const plRootNames = ['Profit & Loss A/c', 'Profit and Loss A/c'];
 
-      const plReq = this.sendRequest(this.buildEnhancedProfitLossXMLRequest(fromDate, toDate));
-      const incomeReqs = incomeGroups.map((g) =>
-        this.sendRequest(this.buildLedgersUnderGroupXMLRequest(g, fromDate, toDate)).catch(() => null)
-      );
-      const expenseReqs = expenseGroups.map((g) =>
-        this.sendRequest(this.buildLedgersUnderGroupXMLRequest(g, fromDate, toDate)).catch(() => null)
-      );
-      const recursiveReqs = plRootNames.map((root) =>
-        this.sendRequest(this.buildRecursiveProfitLossLedgersXMLRequest(fromDate, toDate, root)).catch(() => null)
-      );
-      const allLedgersReq = this.sendRequest(this.buildLedgersXMLRequest(fromDate, toDate)).catch(() => null);
+      const jobs = [
+        () => this.sendRequest(this.buildEnhancedProfitLossXMLRequest(fromDate, toDate)),
+        ...incomeGroups.map((g) => () => this.sendRequest(this.buildLedgersUnderGroupXMLRequest(g, fromDate, toDate)).catch(() => null)),
+        ...expenseGroups.map((g) => () => this.sendRequest(this.buildLedgersUnderGroupXMLRequest(g, fromDate, toDate)).catch(() => null)),
+        ...plRootNames.map((root) => () => this.sendRequest(this.buildRecursiveProfitLossLedgersXMLRequest(fromDate, toDate, root)).catch(() => null)),
+        () => this.sendRequest(this.buildLedgersXMLRequest(fromDate, toDate)).catch(() => null)
+      ];
 
-      const results = await Promise.all([plReq, ...incomeReqs, ...expenseReqs, ...recursiveReqs, allLedgersReq]);
+      const results = [];
+      for (const job of jobs) {
+        results.push(await job());
+      }
       const plRes = results[0];
       const nInc = incomeGroups.length;
       const nExp = expenseGroups.length;

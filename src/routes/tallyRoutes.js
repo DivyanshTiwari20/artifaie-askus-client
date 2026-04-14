@@ -584,10 +584,8 @@ router.get('/profit-loss', protect, authorize('admin', 'manager'), async (req, r
     const profitLoss = await tallyService.getEnhancedProfitLoss(fd, td);
     const tallyTrace = wantTrace ? tallyService.getTraceBuffer() : undefined;
 
-    const [lastMonthPL, sameMonthLYPL] = await Promise.all([
-      tallyService.getEnhancedProfitLoss(lastMonthRange.fromDate, lastMonthRange.toDate).catch(() => null),
-      tallyService.getEnhancedProfitLoss(sameMonthLYRange.fromDate, sameMonthLYRange.toDate).catch(() => null),
-    ]);
+    const lastMonthPL = await tallyService.getEnhancedProfitLoss(lastMonthRange.fromDate, lastMonthRange.toDate).catch(() => null);
+    const sameMonthLYPL = await tallyService.getEnhancedProfitLoss(sameMonthLYRange.fromDate, sameMonthLYRange.toDate).catch(() => null);
 
     const derived = deriveProfitLoss(profitLoss, lastMonthPL, sameMonthLYPL);
 
