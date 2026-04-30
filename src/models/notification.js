@@ -22,24 +22,41 @@ const Notification = {
     try {
       const userRes = await pool.query('SELECT expo_push_token FROM users WHERE id = $1', [userId]);
       const pushToken = userRes.rows[0]?.expo_push_token;
-      
+
       if (pushToken && (pushToken.startsWith('ExponentPushToken') || pushToken.startsWith('ExpoPushToken'))) {
-        axios.post('https://exp.host/--/api/v2/push/send', {
+        console.log(`📲 Sending push to user ${userId}, token: ${pushToken.slice(0, 30)}...`);
+        const pushResponse = await axios.post('https://exp.host/--/api/v2/push/send', {
           to: pushToken,
           title: title,
           body: message,
           data: { relatedTaskId, type, notificationId: notificationRecord.id },
-          sound: 'default'
+          sound: 'default',
+          priority: 'high',
+          channelId: 'default',
         }, {
           headers: {
             'Accept': 'application/json',
             'Accept-encoding': 'gzip, deflate',
             'Content-Type': 'application/json'
           }
-        }).catch(err => console.error('Error sending push:', err.message));
+        });
+
+        const ticket = pushResponse.data?.data?.[0] || pushResponse.data;
+        if (ticket?.status === 'error') {
+          console.error(`❌ Push ticket error for user ${userId}:`, ticket.message, ticket.details);
+          // If token is invalid, clear it so next login will re-register
+          if (ticket.details?.error === 'DeviceNotRegistered') {
+            await pool.query('UPDATE users SET expo_push_token = NULL WHERE id = $1', [userId]);
+            console.log(`🗑️ Cleared stale push token for user ${userId}`);
+          }
+        } else {
+          console.log(`✅ Push sent successfully to user ${userId}, ticket:`, ticket?.id || 'ok');
+        }
+      } else {
+        console.log(`⚠️ No valid push token for user ${userId} (token: ${pushToken || 'null'})`);
       }
     } catch (pushErr) {
-      console.error('Failed to get push token:', pushErr.message);
+      console.error('Failed to send push notification:', pushErr.message);
     }
 
     return this._format(notificationRecord);

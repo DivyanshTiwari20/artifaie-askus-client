@@ -18,7 +18,7 @@ const usersToSeed = [
   { name: 'Gulzar Ahmed', role: 'employee' },
   { name: 'Abbas Raza', role: 'employee' },
   { name: 'Ms Bhavya Srivastava', role: 'employee' },
-  { name: 'CA Amrish Pandey', role: 'employee' },
+  { name: 'CA Ambrish Pandey', role: 'employee' },
   { name: 'Adv Gaurav Pandey', role: 'employee' },
   { name: 'Himanshu Bajpai', role: 'employee' },
   { name: 'Shubrasnsh kumar', role: 'employee' },
