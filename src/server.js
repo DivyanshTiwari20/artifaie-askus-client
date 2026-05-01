@@ -12,6 +12,7 @@ const tallyRoutes = require('./routes/tallyRoutes');
 const taskRoutes = require('./routes/taskRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const clientRoutes = require('./routes/clientRoutes');
+const sessionRoutes = require('./routes/sessionRoutes');
 
 // Initialize Express app
 const app = express();
@@ -82,6 +83,7 @@ app.use('/api/tally', tallyRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/clients', clientRoutes);
+app.use('/api/sessions', sessionRoutes);
 
 // 404 handler - Route not found
 app.use((req, res) => {

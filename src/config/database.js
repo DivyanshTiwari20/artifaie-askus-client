@@ -115,7 +115,22 @@ const initializePostgres = async () => {
     // Add expo_push_token column to users (safe to re-run)
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS expo_push_token VARCHAR(255)`);
 
-    console.log('✅ PostgreSQL tables initialized successfully (users, tasks, notifications, clients)');
+    // Sessions table (active device tracking)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS sessions (
+        id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        session_token VARCHAR(255) NOT NULL UNIQUE,
+        device_name VARCHAR(255) DEFAULT 'Unknown Device',
+        platform VARCHAR(50) DEFAULT 'unknown',
+        last_active TIMESTAMPTZ DEFAULT NOW(),
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query('CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(session_token)');
+
+    console.log('✅ PostgreSQL tables initialized successfully (users, tasks, notifications, clients, sessions)');
   } catch (error) {
     console.error('❌ Error initializing PostgreSQL tables:', error.message);
     throw error;

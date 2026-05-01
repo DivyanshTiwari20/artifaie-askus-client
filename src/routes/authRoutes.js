@@ -2,6 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const User = require('../models/user');
+const Session = require('../models/session');
 const { protect, authorize, generateToken } = require('../middleware/auth');
 
 // Register (temporarily open for first admin)
@@ -78,7 +79,7 @@ router.post('/register', async (req, res) => {
 // Login
 router.post('/login', async (req, res) => {
   try {
-    let { email, password } = req.body;
+    let { email, password, deviceName, platform, sessionToken } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({
@@ -119,6 +120,20 @@ router.post('/login', async (req, res) => {
     }
 
     const token = generateToken(user.id);
+
+    // Record session if sessionToken is provided by the device
+    if (sessionToken) {
+      try {
+        await Session.upsert({
+          userId: user.id,
+          sessionToken,
+          deviceName: deviceName || 'Unknown Device',
+          platform: platform || 'unknown',
+        });
+      } catch (sessionErr) {
+        console.error('Session recording error (non-fatal):', sessionErr.message);
+      }
+    }
 
     res.status(200).json({
       success: true,
