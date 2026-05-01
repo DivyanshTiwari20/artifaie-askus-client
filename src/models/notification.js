@@ -65,7 +65,7 @@ const Notification = {
   /**
    * Get notifications for a user based on role and mode
    */
-  async findForUser(user, mode, limit = 50, offset = 0) {
+  async findForUser(user, mode, limit = 50, offset = 0, dateFilter = 'all') {
     let query = `SELECT * FROM notifications WHERE user_id = $1 `;
     let values = [user.id];
     let paramIndex = 2;
@@ -74,6 +74,14 @@ const Notification = {
       query += ` AND type IN ('task', 'alert') `;
     } else if (mode === 'general') {
       query += ` AND type NOT IN ('task', 'alert') `;
+    }
+
+    if (dateFilter === 'today') {
+      query += ` AND created_at >= CURRENT_DATE `;
+    } else if (dateFilter === 'week') {
+      query += ` AND created_at >= CURRENT_DATE - INTERVAL '7 days' `;
+    } else if (dateFilter === 'month') {
+      query += ` AND created_at >= CURRENT_DATE - INTERVAL '30 days' `;
     }
 
     query += ` ORDER BY created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex+1}`;
