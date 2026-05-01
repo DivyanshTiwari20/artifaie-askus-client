@@ -13,6 +13,7 @@ const taskRoutes = require('./routes/taskRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const clientRoutes = require('./routes/clientRoutes');
 const sessionRoutes = require('./routes/sessionRoutes');
+const { startCron } = require('./cron/tallySync');
 
 // Initialize Express app
 const app = express();
@@ -121,6 +122,9 @@ app.listen(PORT, HOST, () => {
   console.log(`   🗄️  Database: PostgreSQL (AWS RDS)`);
   console.log(`   📊 Tally Host: ${process.env.TALLY_HOST || 'Not configured'}`);
   console.log('   ========================================\n');
+  
+  // Start background jobs
+  startCron();
 });
 
 // Handle unhandled promise rejections

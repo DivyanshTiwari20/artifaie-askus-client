@@ -485,7 +485,22 @@ router.get('/vouchers/:type', protect, authorize('admin', 'manager'), async (req
  */
 router.get('/receivables', protect, authorize('admin', 'manager'), async (req, res) => {
   try {
-    const { fromDate, toDate } = resolveReportDates(req.query.fromDate, req.query.toDate);
+    const { fromDate: qFrom, toDate: qTo, refresh } = req.query;
+    const { fromDate, toDate } = resolveReportDates(qFrom, qTo);
+
+    if (!qFrom && !qTo && refresh !== 'true') {
+      const { pool } = require('../config/database');
+      const cacheResult = await pool.query(`SELECT data FROM tally_cache WHERE cache_key = 'receivables_default'`);
+      if (cacheResult.rows.length > 0) {
+        return res.status(200).json({
+          success: true,
+          count: cacheResult.rows[0].data.bills?.length || 0,
+          data: cacheResult.rows[0].data,
+          filters: { fromDate, toDate },
+          _source: 'cron_cache'
+        });
+      }
+    }
 
     console.log('📊 Fetching Receivables from Tally...');
     console.log(`   Period: ${fromDate} to ${toDate}`);
@@ -564,10 +579,30 @@ router.get('/payables', protect, authorize('admin', 'manager'), async (req, res)
  */
 router.get('/profit-loss', protect, authorize('admin', 'manager'), async (req, res) => {
   try {
-    const { fromDate, toDate, trace } = req.query;
+    const { fromDate: qFrom, toDate: qTo, trace, refresh } = req.query;
     const wantTrace = trace === '1' || trace === 'true';
 
-    const { fromDate: fd, toDate: td } = resolveReportDates(fromDate, toDate);
+    const { fromDate: fd, toDate: td } = resolveReportDates(qFrom, qTo);
+
+    if (!qFrom && !qTo && refresh !== 'true' && !wantTrace) {
+      const { pool } = require('../config/database');
+      const cacheResult = await pool.query(`SELECT data FROM tally_cache WHERE cache_key = 'profit_loss_default'`);
+      if (cacheResult.rows.length > 0) {
+        return res.status(200).json({
+          success: true,
+          data: cacheResult.rows[0].data,
+          filters: {
+            fromDate: fd,
+            toDate: td,
+            comparedWith: {
+              lastMonth: `${getPreviousMonthRange().fromDate} - ${getPreviousMonthRange().toDate}`,
+              sameMonthLastYear: `${getSameMonthLastYearRange().fromDate} - ${getSameMonthLastYearRange().toDate}`,
+            },
+          },
+          _source: 'cron_cache'
+        });
+      }
+    }
 
     console.log('📊 Fetching Enhanced Profit & Loss from Tally...');
     console.log(`   Period: ${fd} to ${td}`);
@@ -665,8 +700,22 @@ router.get('/gst-summary', protect, authorize('admin', 'manager'), async (req, r
  */
 router.get('/client-billing', protect, authorize('admin', 'manager'), async (req, res) => {
   try {
-    const { clientName } = req.query;
-    const { fromDate, toDate } = resolveReportDates(req.query.fromDate, req.query.toDate);
+    const { clientName, fromDate: qFrom, toDate: qTo, refresh } = req.query;
+    const { fromDate, toDate } = resolveReportDates(qFrom, qTo);
+
+    if (!qFrom && !qTo && !clientName && refresh !== 'true') {
+      const { pool } = require('../config/database');
+      const cacheResult = await pool.query(`SELECT data FROM tally_cache WHERE cache_key = 'client_billing_default'`);
+      if (cacheResult.rows.length > 0) {
+        return res.status(200).json({
+          success: true,
+          count: cacheResult.rows[0].data.invoices?.length || 0,
+          data: cacheResult.rows[0].data,
+          filters: { clientName: 'All', fromDate, toDate },
+          _source: 'cron_cache'
+        });
+      }
+    }
 
     console.log('📊 Fetching Client Billing from Tally...');
     console.log(`   Client: ${clientName || 'All'}`);
@@ -703,7 +752,21 @@ router.get('/client-billing', protect, authorize('admin', 'manager'), async (req
  */
 router.get('/bank-position', protect, authorize('admin', 'manager'), async (req, res) => {
   try {
-    const { fromDate, toDate } = resolveReportDates(req.query.fromDate, req.query.toDate);
+    const { fromDate: qFrom, toDate: qTo, refresh } = req.query;
+    const { fromDate, toDate } = resolveReportDates(qFrom, qTo);
+
+    if (!qFrom && !qTo && refresh !== 'true') {
+      const { pool } = require('../config/database');
+      const cacheResult = await pool.query(`SELECT data FROM tally_cache WHERE cache_key = 'bank_position_default'`);
+      if (cacheResult.rows.length > 0) {
+        return res.status(200).json({
+          success: true,
+          data: cacheResult.rows[0].data,
+          filters: { fromDate, toDate },
+          _source: 'cron_cache'
+        });
+      }
+    }
 
     console.log('📊 Fetching Bank Position from Tally...');
     console.log(`   Period: ${fromDate} to ${toDate}`);

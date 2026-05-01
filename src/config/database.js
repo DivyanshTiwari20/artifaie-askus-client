@@ -130,7 +130,16 @@ const initializePostgres = async () => {
     await client.query('CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)');
     await client.query('CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(session_token)');
 
-    console.log('✅ PostgreSQL tables initialized successfully (users, tasks, notifications, clients, sessions)');
+    // Tally Cache table for Cron job
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS tally_cache (
+        cache_key VARCHAR(255) PRIMARY KEY,
+        data JSONB NOT NULL,
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    console.log('✅ PostgreSQL tables initialized successfully (users, tasks, notifications, clients, sessions, tally_cache)');
   } catch (error) {
     console.error('❌ Error initializing PostgreSQL tables:', error.message);
     throw error;
